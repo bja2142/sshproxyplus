@@ -4,6 +4,50 @@
 The goal of this project is to create an ssh proxy that can provide real-time logging,
 mirroring, and monitoring of ssh sessions as they occur. 
 
+## Dependencies
+
+For xterm.js to work, you'll need to pull 
+down the source files. 
+
+Go to html/js and run:
+
+```
+npm install --save xterm.js
+npm install --save xterm-addon-fit
+```
+
+For me, on stock Ubuntu server 20.04, this places the xterm source in:
+
+`html/js/node_modules/xterm/` 
+
+and
+
+`html/js/nod_modules/xterm-addon-fit/`
+
+
+## Usage:
+
+### Launching Go Server
+
+```
+go mod tidy
+go run .
+```
+
+For usage:
+
+```
+go run . --help
+```
+
+### Launching Static HTML server
+
+``` 
+cd html
+python3 -m http.server
+```
+
+
 ## Supported Channel Types:
 -exec
 -tty
@@ -35,15 +79,3 @@ interface to view data that has been recorded
 ability to replay old data 
 --> interface with sqlite database and flat files
 
-## Database
-
-proxies
-- file: session_num_name <- contains timestamp of last update
-
-sessions
--folders num_name
-	username
-		channels
-			-in
-			-out
-			port_NUM <- contains timestamp of last update
