@@ -1,7 +1,10 @@
 
-let dummy_socket = {send: function() {return;}}
+let dummy_socket = {
+    send: function() {return;}, 
+    close: function() { statusbar_end(); }}
 var active_queues = {}
 var active_session_sockets = {}
+global_terminal_writeln = false
 
 function get_base_host_addr()
 {
@@ -140,19 +143,39 @@ function process_outgoing(in_data)
 
 function process_event(chunk,socket)
 {
-    if (chunk.type == "window-size") {
+    if (chunk.type == "window-resize") {
         resize_terminal(chunk.rows, chunk.columns)
         socket.send('ack');
-    } else {
+    } else if (chunk.type == "new-message") {
         if (chunk.direction == "incoming") {
             decoded_data = atob (chunk.data)
             console.log(decoded_data)
-            global_terminal.write(decoded_data, () => { socket.send('ack'); })
+            if (global_terminal_writeln) {
+                global_terminal.writeln(decoded_data +"<br>", () => { socket.send('ack'); })
+            } else 
+            {
+                global_terminal.write(decoded_data, () => { socket.send('ack'); })
+            }
+            
         } else if (chunk.direction == "outgoing") {
             decoded_data = atob (chunk.data)
             process_outgoing(decoded_data)
             socket.send('ack');
         }
+    } else if (chunk.type == "session-stop") {
+        socket.send('ack');
+        statusbar_end()
+        socket.close()
+    } else if (chunk.type == "new-request") {
+        if (chunk.request_type == "exec") 
+        {
+            update_statusbar(" exec:"+atob(chunk.request_payload),true)
+            global_terminal_writeln = true
+            
+        }
+        socket.send('ack');
+    } else {
+        socket.send('ack');
     }
 }
 
@@ -196,7 +219,9 @@ function init_session_tty(keyname,obj)
 
 function statusbar_end()
 {
-    update_statusbar(" (ended)",true);
+    if(jQuery("#terminal_statusbar").text().indexOf("(ended)") != -1) {
+        update_statusbar(" (ended)",true);
+    }
     jQuery("#terminal_statusbar").removeClass("live old inactive").addClass("inactive")
 }
 
@@ -216,7 +241,6 @@ function process_event_queue(queue)
             delay = queue[0].offset - cur_event.offset
         } else {
             delay = 0
-            statusbar_end()
         }
         
         process_event(cur_event,dummy_socket)
@@ -241,6 +265,7 @@ function reset_terminal()
         delete active_session_sockets[key]
      });
     global_terminal.reset()
+    global_terminal_writeln = false
 }
 
 function replay_session(data)
@@ -254,12 +279,15 @@ function replay_session(data)
     {
         blob = data[index]
         switch(blob.type) {
-            case "session-metadata":
+            case "session-start":
                 session = Object.assign({}, session, blob);
                 break;
-            case "request-data":
-                session.requests.push(blob)
+            case "new-request":
+                session[blob.request_type] = blob.request_payload
                 break;
+            case "window-resize":
+                session = Object.assign({}, session, blob);
+                break;   
             default:
                 event_queue.push(blob)
                 break;
@@ -269,7 +297,6 @@ function replay_session(data)
     active_queues[this.url]= event_queue
     console.log(session)
     statusbar_start(`From: ${session.client_host}; To: ${session.server_host};`,"old")
-
     process_event_queue(event_queue)
 }
 
