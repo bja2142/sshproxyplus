@@ -14,28 +14,35 @@
         integrity="sha256-/xUj+3OJU5yExlq6GSYGSHk7tPXikynS7ogEvDej/m4="
         crossorigin="anonymous"></script>
         <script type="text/javascript" src="js/lib.js"></script>
-        <script type="text/javascript" src="js/live.js"></script>
-        <link rel="stylesheet" href="css/style.css" />
+        <script type="text/javascript" src="js/replay.js"></script>
+        <style type="text/css">
+            #terminal
+            {
+                display:block;
+                margin: 0px auto;
+                width:800px;
+                height:600px; 
+            }
+            #keystrokes 
+            {
+                width:800px;
+                height:100px;
+                color: #cfc;
+                border:1px solid white;
+                background: #000;
+                margin:0px auto;
+                display:block;
+            }
+        </style>
     </head>
 <body>
-<div id="terminal_wrapper">
-    <h4 id="terminal_statusbar" class="inactive">Currently Displaying: <span>Nothing</span></h4>
-    <div id="terminal"></div>
-    <textarea id="keystrokes" readonly="readonly" placeholder="Session input goes here..."></textarea>
-</div>
 
-<div class="list-container">
-    <div class="session_list_container inactive" id="active_session_list_container">
-        <h1>Active Sessions</h1>
-        <ul id="session_list">
-        </ul>
-    </div>
-    <div class="session_list_container old" id="old_session_list_container">
-        <h1>Previous Sessions</h1>
-        <ul id="old_session_list">
-        </ul>
-    </div>
-</div>
+<div id="terminal"></div>
+<textarea id="keystrokes" readonly="readonly"></textarea>
+<h1>Archived Sessions</h1>
+<ul id="old_session_list">
+
+</ul>
 
 
 </body>
