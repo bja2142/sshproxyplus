@@ -47,7 +47,7 @@ func getSessionInfo(active_only bool) []session_info {
 		session_key := sessions_keys[index]
 		session_list[index].Key = session_key
 		session_list[index].Active = SshSessions[session_key].active
-		session_list[index].Start_time = SshSessions[session_key].start_time.Unix()
+		session_list[index].Start_time = SshSessions[session_key].getStartTimeAsUnix()
 		stop_time := SshSessions[session_key].stop_time
 		if SshSessions[session_key].active {
 			stop_time = time.Now()
@@ -85,10 +85,10 @@ func send_window_update(rows uint32, columns uint32,  conn * websocket.Conn){
 }
 
 
-func send_latest_chunks(prev_index int, new_index int, conn * websocket.Conn, chunks []block_chunk){
+func send_latest_events(prev_index int, new_index int, conn * websocket.Conn, events []*sessionEvent){
 
-	for _, msg := range chunks[prev_index:new_index] {
-		data, err := json.Marshal(msg)
+	for _, event := range events[prev_index:new_index] {
+		data, err := json.Marshal(event)
 		if err != nil {
 			log.Println("Error during marshaling json: ", err)
 			break
@@ -154,35 +154,30 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 				fmt.Printf("selecting %v\n",session)
 				
 				if context, ok := SshSessions[session]; ok {
-					last_channel_index := make([]int, len(context.channels))
+					
+					last_event_index := 0
+					new_event_index := len(context.events)
 					fmt.Println("found session")
 					client_signal :=  context.new_signal()
 					fmt.Println("have signal")
-					send_window_update(context.term_rows,context.term_cols, conn)
-					for channel_index, channel := range context.channels {
-						new_index := len(channel.chunks)
-						send_latest_chunks(last_channel_index[channel_index], 
-							new_index, conn, channel.chunks)
+					//send_window_update(context.term_rows,context.term_cols, conn)
+					send_latest_events(last_event_index, 
+							new_event_index, conn, context.events)
 						
-						last_channel_index[channel_index] = new_index
-					}					
+					last_event_index = new_event_index				
 					for true {
 						switch <-client_signal {
-						case SIGNAL_SESSION_END:
-							fmt.Println("session ended")
-							break
-						case SIGNAL_RESIZE_WINDOW:
-							fmt.Println("resize window signal")
-							send_window_update(context.term_rows,context.term_cols, conn)
-						case SIGNAL_NEW_MESSAGE: 
-							fmt.Println("new message signal")
-							for channel_index, channel := range context.channels {
-								new_index := len(channel.chunks)
-								send_latest_chunks(last_channel_index[channel_index], 
-									new_index, conn, channel.chunks)
+							case SIGNAL_SESSION_END:
+								fmt.Println("session ended")
+								break
+							case SIGNAL_NEW_MESSAGE: 
+								fmt.Println("new message signal")
+								new_event_index := len(context.events)
+								send_latest_events(last_event_index, 
+									new_event_index, conn, context.events)
 								
-								last_channel_index[channel_index] = new_index
-							}	
+								last_event_index = new_event_index	
+							
 						}
 					}
 					fmt.Println("no more messages")

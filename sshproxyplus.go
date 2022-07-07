@@ -41,7 +41,7 @@ var (
 
 const SIGNAL_SESSION_END int = 0
 const SIGNAL_NEW_MESSAGE int = 1
-const SIGNAL_RESIZE_WINDOW int = 2
+//const SIGNAL_RESIZE_WINDOW int = 2
 
 // a proxy context should be modular
 // so that multiple proxies can be run in the same
@@ -62,6 +62,7 @@ type session_context struct {
 	proxy				proxy_context
 	mutex				sync.Mutex
 	log_mutex			sync.Mutex
+	event_mutex			sync.Mutex
 	log_fd				*os.File
 	client_host			string
 	client_username		string
@@ -79,7 +80,7 @@ type session_context struct {
 	term_rows			uint32
 	term_cols			uint32
 	filename			string
-	events				[]sessionEvent
+	events				[]*sessionEvent
 }
 // TODO: create a routine to remove a signal
 // so the signal list doesn't get crowded.
@@ -127,19 +128,20 @@ func start_proxy(context proxy_context) {
 		conn.User(),
 		password)
 		sess_key := conn.LocalAddr().String()+":"+conn.RemoteAddr().String()
-		SshSessions[sess_key].client_password = string(password)
-		SshSessions[sess_key].client_username = conn.User()
-		SshSessions[sess_key].proxy = context
-		SshSessions[sess_key].channels = make([]*channel_data, 0)
-		SshSessions[sess_key].channel_count = 0
-		SshSessions[sess_key].requests = make([]*request_data, 0)
-		SshSessions[sess_key].request_count = 0
-		SshSessions[sess_key].active = true
-		SshSessions[sess_key].thread_count = 0
-		SshSessions[sess_key].start_time = time.Now()
-		SshSessions[sess_key].msg_signal = make([]chan int,0)
-		SshSessions[sess_key].filename = sess_key + ".log.json"
-		SshSessions[sess_key].mutex.Unlock()
+		cur_session := SshSessions[sess_key]
+		cur_session.client_password = string(password)
+		cur_session.client_username = conn.User()
+		cur_session.proxy = context
+		cur_session.channels = make([]*channel_data, 0)
+		cur_session.channel_count = 0
+		cur_session.requests = make([]*request_data, 0)
+		cur_session.request_count = 0
+		cur_session.active = true
+		cur_session.thread_count = 0
+		cur_session.start_time = time.Now()
+		cur_session.msg_signal = make([]chan int,0)
+		cur_session.filename = sess_key + ".log.json"
+		cur_session.mutex.Unlock()
 		return nil, nil
 	},
 //	ServerVersion: "OpenSSH_8.2p1 Ubuntu-4ubuntu0.5",
@@ -203,6 +205,11 @@ func forward_channel(context * session_context, dest_conn ssh.Conn, cur_channel 
 		context.proxy.log.Printf("error open channel: %w\n", err)
 		return
 	}
+	context.handleEvent(
+		&sessionEvent{
+			Type: EVENT_NEW_CHANNEL,
+			ChannelType: cur_channel.ChannelType(),
+		})
 	context.proxy.log.Printf("Opening channel of type: %v\n", cur_channel.ChannelType())
 	defer outgoing_channel.Close()
 
@@ -291,8 +298,15 @@ func forward_request(context * session_context, outgoing_channel requestDest, re
 	
 	
 	context.request_count += 1
+	
 	request_entry := &request_data{Req_type: request.Type, Req_payload: request.Payload, Msg_type: "request-data", Offset: context.get_time_offset() }
-	context.log_request(request_entry)
+	context.handleEvent(
+		&sessionEvent{
+			Type: EVENT_NEW_REQUEST,
+			RequestType:  request.Type,
+			RequestPayload: request.Payload,
+		})
+	
 	context.requests = append(context.requests, request_entry)
 	if request.Type == "env" || request.Type == "shell" || request.Type == "exec" {
 		context.proxy.log.Printf("req.Type:%v, req.Payload:%v\n",request.Type,string(request.Payload))
@@ -308,7 +322,12 @@ func forward_request(context * session_context, outgoing_channel requestDest, re
 				width, height := parseDims(request.Payload[termLen+4:])
 				context.term_rows = height
 				context.term_cols = width
-				context.log_resize()
+				go context.handleEvent(
+					&sessionEvent{
+						Type: EVENT_WINDOW_RESIZE,
+						TermRows: context.term_rows,
+						TermCols: context.term_cols,
+					})
 				context.proxy.log.Printf("Window row:%v, col:%v\n", height,width)
 			}
 		}					
@@ -316,8 +335,12 @@ func forward_request(context * session_context, outgoing_channel requestDest, re
 		width, height := parseDims(request.Payload)
 		context.term_rows = height
 		context.term_cols = width
-		context.signal_resize_window()
-		context.log_resize()
+		go context.handleEvent(
+			&sessionEvent{
+				Type: EVENT_WINDOW_RESIZE,
+				TermRows: context.term_rows,
+				TermCols: context.term_cols,
+			})
 		context.proxy.log.Printf("New window row:%v, col:%v\n", height,width)
 	} 
 	ok, product, err := outgoing_channel.SendRequest(request.Type, request.WantReply, request.Payload)
@@ -345,10 +368,11 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 
 
 	sess_key := client_conn.LocalAddr().String()+":"+client_conn.RemoteAddr().String()
-	SshSessions[sess_key].thread_start()
-	SshSessions[sess_key].init_log()
-	defer SshSessions[sess_key].thread_stop()
-	context.log.Printf("i can see password: %s\n",SshSessions[sess_key].client_password)
+	cur_session := SshSessions[sess_key]
+	cur_session.thread_start()
+	cur_session.init_log()
+	defer cur_session.thread_stop()
+	context.log.Printf("i can see password: %s\n",cur_session.client_password)
 	
 	// connect to client.
 
@@ -358,7 +382,7 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 		User:            client_conn.User(),
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Auth: []ssh.AuthMethod{
-			ssh.Password(SshSessions[sess_key].client_password),
+			ssh.Password(cur_session.client_password),
 		},
 
 	}
@@ -377,20 +401,32 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 		return 
 	}
 
-	SshSessions[sess_key].mutex.Lock()
-	SshSessions[sess_key].remote_conn = &remote_conn
-	SshSessions[sess_key].mutex.Unlock()
+	cur_session.mutex.Lock()
+	cur_session.remote_conn = &remote_conn
+	cur_session.mutex.Unlock()
 
 	shutdown_err := make(chan error, 1)
 	go func() {
 		shutdown_err <- remote_conn.Wait()
 	}()
 
-	SshSessions[sess_key].log_session_data()
-	go handle_channels(SshSessions[sess_key], remote_conn, client_channels)
-	go handle_channels(SshSessions[sess_key], client_conn, remote_channels)
-	go handle_requests(SshSessions[sess_key], client_conn, remote_requests)
-	go handle_requests(SshSessions[sess_key], remote_conn, client_requests)
+	cur_session.handleEvent(
+		&sessionEvent{
+			Type: EVENT_SESSION_START,
+			Key: sess_key,
+			ServHost: remote_server_host,
+			ClientHost: client_conn.RemoteAddr().String(),
+			Username: cur_session.client_username ,
+			Password: cur_session.client_password,
+			StartTime: cur_session.getStartTimeAsUnix(),
+			TimeOffset: 0,
+		})
+
+	//cur_session.log_session_data()
+	go handle_channels(cur_session, remote_conn, client_channels)
+	go handle_channels(cur_session, client_conn, remote_channels)
+	go handle_requests(cur_session, client_conn, remote_requests)
+	go handle_requests(cur_session, remote_conn, client_requests)
 	
 
 	<-shutdown_err
@@ -573,8 +609,14 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 			Data: data_copy,
 		}
 		channel.context.channels[channel.channel_id].chunks = append(channel.context.channels[channel.channel_id].chunks, new_chunk)
-		go channel.context.signal_new_message()
-		go channel.context.log_chunk(&new_chunk)
+		go channel.context.handleEvent(
+			&sessionEvent{
+				Type: EVENT_MESSAGE,
+				Direction: channel.direction,
+				ChannelType: channel.data_type,
+				Size:	bytes_read,
+				Data:	data_copy,
+			})
 	}
 
 	return bytes_read, err
@@ -594,11 +636,11 @@ func (context * session_context) signal_new_message() {
 func (context * session_context) signal_session_end() {
 	context.send_signal_to_clients(SIGNAL_SESSION_END)
 }
-
+/*
 func (context * session_context) signal_resize_window() {
 	context.send_signal_to_clients(SIGNAL_RESIZE_WINDOW)
 }
-
+*/
 
 
 func (context * session_context) thread_start() {
@@ -613,6 +655,11 @@ func (context * session_context) thread_stop() {
 	if context.thread_count < 1 {
 		context.active = false
 		context.stop_time = time.Now()
+		context.handleEvent(
+			&sessionEvent{
+				Type: EVENT_SESSION_STOP,
+				StopTime: context.getStopTimeAsUnix(),
+			})
 		context.signal_session_end()
 		context.finalize_log()
 	}
@@ -640,6 +687,14 @@ func (context * session_context) session_info_as_JSON() string {
 	return string(data)
 }
 
+
+
+func (context * session_context) get_time_offset() int64 {
+	time_now := time.Now()
+	return time_now.Sub(context.start_time).Milliseconds()
+}
+
+/*
 func (context * session_context) log_session_data()  {
 	data := context.session_info_as_JSON()
 	context.append_to_log([]byte(data))
@@ -654,12 +709,6 @@ func (context * session_context) log_chunk(chunk *block_chunk)  {
 	data := []byte(",\n" + string(json_data))
 	context.append_to_log(data)
 }
-
-func (context * session_context) get_time_offset() int64 {
-	time_now := time.Now()
-	return time_now.Sub(context.start_time).Milliseconds()
-}
-
 func (context * session_context) log_resize()  {
 	msg := window_message_extended{Rows:int64(context.term_rows), Columns: int64(context.term_cols), Type: "window-size", Offset: context.get_time_offset()}
 	json_data, err := json.Marshal(msg)
@@ -672,10 +721,6 @@ func (context * session_context) log_resize()  {
 
 }
 
-func (context * session_context) addEvent(event sessionEvent) {
-	
-}
-
 func (context * session_context) log_request(msg *request_data)  {
 	json_data, err := json.Marshal(msg)
 	if err != nil {
@@ -684,8 +729,8 @@ func (context * session_context) log_request(msg *request_data)  {
 	}
 	data := []byte(",\n" + string(json_data))
 	context.append_to_log(data)
-
 }
+*/
 
 func (context * session_context) init_log()  {
 	f, err := os.OpenFile(*context.proxy.session_folder + "/" + context.filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
@@ -708,8 +753,6 @@ func (context * session_context) append_to_log(data []byte) {
 }
 
 func (context * session_context) finalize_log()  {
-	context.append_to_log([]byte(",\n"))
-	context.log_session_data()
 	context.append_to_log([]byte("\n]"))
 	if err := context.log_fd.Close(); err != nil {
 		context.proxy.log.Println("error closing log file:", err)
