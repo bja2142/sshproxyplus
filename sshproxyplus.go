@@ -30,6 +30,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"encoding/binary"
+	"encoding/json"
 )
 
 var (
@@ -53,12 +54,15 @@ type proxy_context struct {
 	listen_port			*int
 	private_key			ssh.Signer
 	log					*log.Logger
+	session_folder		*string
 }
 
 // session context
 type session_context struct {
 	proxy				proxy_context
 	mutex				sync.Mutex
+	log_mutex			sync.Mutex
+	log_fd				*os.File
 	client_host			string
 	client_username		string
 	client_password		string	
@@ -74,6 +78,8 @@ type session_context struct {
 	msg_signal			[]chan int
 	term_rows			uint32
 	term_cols			uint32
+	filename			string
+	events				[]sessionEvent
 }
 // TODO: create a routine to remove a signal
 // so the signal list doesn't get crowded.
@@ -108,7 +114,8 @@ func main() {
 // 		a web socket
 
 
-// TODO: get console width and height
+// TODO: track all session events in a single list
+// similar to the logging rather than storing them in channels, etc
 func start_proxy(context proxy_context) {
 	context.log.Printf("Starting proxy on socket %v:%v\n", *context.listen_ip, *context.listen_port)
 	config := &ssh.ServerConfig{
@@ -131,6 +138,7 @@ func start_proxy(context proxy_context) {
 		SshSessions[sess_key].thread_count = 0
 		SshSessions[sess_key].start_time = time.Now()
 		SshSessions[sess_key].msg_signal = make([]chan int,0)
+		SshSessions[sess_key].filename = sess_key + ".log.json"
 		SshSessions[sess_key].mutex.Unlock()
 		return nil, nil
 	},
@@ -283,7 +291,9 @@ func forward_request(context * session_context, outgoing_channel requestDest, re
 	
 	
 	context.request_count += 1
-	context.requests = append(context.requests, &request_data{req_type: request.Type, req_payload: request.Payload})
+	request_entry := &request_data{Req_type: request.Type, Req_payload: request.Payload, Msg_type: "request-data", Offset: context.get_time_offset() }
+	context.log_request(request_entry)
+	context.requests = append(context.requests, request_entry)
 	if request.Type == "env" || request.Type == "shell" || request.Type == "exec" {
 		context.proxy.log.Printf("req.Type:%v, req.Payload:%v\n",request.Type,string(request.Payload))
 	} else {
@@ -298,7 +308,8 @@ func forward_request(context * session_context, outgoing_channel requestDest, re
 				width, height := parseDims(request.Payload[termLen+4:])
 				context.term_rows = height
 				context.term_cols = width
-				context.proxy.log.Printf("New window row:%v, col:%v\n", height,width)
+				context.log_resize()
+				context.proxy.log.Printf("Window row:%v, col:%v\n", height,width)
 			}
 		}					
 	} else if request.Type == "window-change" && len(request.Payload) >= 8 {
@@ -306,6 +317,7 @@ func forward_request(context * session_context, outgoing_channel requestDest, re
 		context.term_rows = height
 		context.term_cols = width
 		context.signal_resize_window()
+		context.log_resize()
 		context.proxy.log.Printf("New window row:%v, col:%v\n", height,width)
 	} 
 	ok, product, err := outgoing_channel.SendRequest(request.Type, request.WantReply, request.Payload)
@@ -334,6 +346,7 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 
 	sess_key := client_conn.LocalAddr().String()+":"+client_conn.RemoteAddr().String()
 	SshSessions[sess_key].thread_start()
+	SshSessions[sess_key].init_log()
 	defer SshSessions[sess_key].thread_stop()
 	context.log.Printf("i can see password: %s\n",SshSessions[sess_key].client_password)
 	
@@ -373,6 +386,7 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 		shutdown_err <- remote_conn.Wait()
 	}()
 
+	SshSessions[sess_key].log_session_data()
 	go handle_channels(SshSessions[sess_key], remote_conn, client_channels)
 	go handle_channels(SshSessions[sess_key], client_conn, remote_channels)
 	go handle_requests(SshSessions[sess_key], client_conn, remote_requests)
@@ -442,6 +456,7 @@ func init_proxy_context() proxy_context {
 	proxy_listen_ip   := flag.String("lip", "0.0.0.0", "ip for proxy to bind to")
 	proxy_key   := flag.String("lkey", "autogen", "private key for proxy to use; defaults to autogen new key")
 	log_file := flag.String("log", "-", "file to log to; defaults to stdout")
+	session_folder := flag.String("dir", ".", "directory to write sessions to; defaults to the current directory")
 
 	flag.Parse()
 
@@ -466,6 +481,17 @@ func init_proxy_context() proxy_context {
 		err = errors.New("must autogen")
 	}
 
+	// https://freshman.tech/snippets/go/create-directory-if-not-exist/
+	if *session_folder != "." {
+		if _, err := os.Stat(*session_folder); errors.Is(err, os.ErrNotExist) {
+			err := os.Mkdir(*session_folder, os.ModePerm)
+			if err != nil {
+				Logger.Println(err)
+			}
+		}
+	}
+
+
 	if err != nil {
 		proxy_private_key,err = generate_signer()
 		Logger.Printf("Generating new key.")
@@ -481,7 +507,8 @@ func init_proxy_context() proxy_context {
 		proxy_listen_ip,
 		proxy_listen_port,
 		proxy_private_key,
-		Logger}
+		Logger,
+		session_folder}
 }
 
 
@@ -523,8 +550,8 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 	bytes_read, err = channel.ReadWriter.Read(buff)
 
 	if err == nil {
-		time_now := time.Now()
-		time_elapsed := time_now.Sub(channel.start_time).Milliseconds()
+		
+		time_elapsed := channel.context.get_time_offset()
 		// reference: https://github.com/dutchcoders/sshproxy/blob/9b3ed8f5f5a7018c8dc09b4266e7f630683a9596/readers.go#L35
 		channel.context.proxy.log.Printf("dir: %v, type: %v, msec: %v, data(%v)\n", 
 		channel.direction, 
@@ -538,15 +565,16 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 	
 		copy(data_copy, buff)
 
-		channel.context.channels[channel.channel_id].chunks = append(channel.context.channels[channel.channel_id].chunks, 
-			block_chunk{
-				Direction: channel.direction, 
-				Channel_type: channel.data_type, 
-				Time_offset: time_elapsed, 
-				Size: bytes_read, 
-				Data: data_copy,
-			})
+		new_chunk := block_chunk{
+			Direction: channel.direction, 
+			Channel_type: channel.data_type, 
+			Time_offset: time_elapsed, 
+			Size: bytes_read, 
+			Data: data_copy,
+		}
+		channel.context.channels[channel.channel_id].chunks = append(channel.context.channels[channel.channel_id].chunks, new_chunk)
 		go channel.context.signal_new_message()
+		go channel.context.log_chunk(&new_chunk)
 	}
 
 	return bytes_read, err
@@ -586,14 +614,108 @@ func (context * session_context) thread_stop() {
 		context.active = false
 		context.stop_time = time.Now()
 		context.signal_session_end()
+		context.finalize_log()
 	}
 	context.mutex.Unlock()
 }
 
 
 func (context * session_context) session_info_as_JSON() string {
-	return ""
+	session_info := session_info_extended{
+		Start_time: 	context.start_time.Unix(),
+		Stop_time: 		context.stop_time.Unix(),
+		Length:			int64(context.stop_time.Sub(context.start_time).Seconds()),
+		Client_host:	context.client_host,
+		Serv_host:		*context.proxy.server_ssh_ip +":"+strconv.Itoa(*context.proxy.server_ssh_port),
+		Username:		context.client_username,
+		Password: 		context.client_password,
+		Term_rows:		context.term_rows,
+		Term_cols:		context.term_cols,
+		Type:			"session-metadata"}
+	data, err := json.Marshal(session_info)
+	if err != nil {
+		context.proxy.log.Println("Error during marshaling json: ", err)
+		return ""
+	}
+	return string(data)
 }
+
+func (context * session_context) log_session_data()  {
+	data := context.session_info_as_JSON()
+	context.append_to_log([]byte(data))
+}
+
+func (context * session_context) log_chunk(chunk *block_chunk)  {
+	json_data, err := json.Marshal(chunk)
+	if err != nil {
+		context.proxy.log.Println("Error during marshaling json: ", err)
+		return 
+	}
+	data := []byte(",\n" + string(json_data))
+	context.append_to_log(data)
+}
+
+func (context * session_context) get_time_offset() int64 {
+	time_now := time.Now()
+	return time_now.Sub(context.start_time).Milliseconds()
+}
+
+func (context * session_context) log_resize()  {
+	msg := window_message_extended{Rows:int64(context.term_rows), Columns: int64(context.term_cols), Type: "window-size", Offset: context.get_time_offset()}
+	json_data, err := json.Marshal(msg)
+	if err != nil {
+		context.proxy.log.Println("Error during marshaling json: ", err)
+		return 
+	}
+	data := []byte(",\n" + string(json_data))
+	context.append_to_log(data)
+
+}
+
+func (context * session_context) addEvent(event sessionEvent) {
+	
+}
+
+func (context * session_context) log_request(msg *request_data)  {
+	json_data, err := json.Marshal(msg)
+	if err != nil {
+		context.proxy.log.Println("Error during marshaling json: ", err)
+		return 
+	}
+	data := []byte(",\n" + string(json_data))
+	context.append_to_log(data)
+
+}
+
+func (context * session_context) init_log()  {
+	f, err := os.OpenFile(*context.proxy.session_folder + "/" + context.filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		context.proxy.log.Println("error opening session log file:", err)
+	}
+	context.mutex.Lock()
+		context.log_fd = f
+	context.mutex.Unlock()
+	context.append_to_log([]byte("[\n")); 
+}
+
+func (context * session_context) append_to_log(data []byte) {
+	context.log_mutex.Lock()
+	if _, err := context.log_fd.Write(data); err != nil {
+		context.log_fd.Close() // ignore error; Write error takes precedence
+		context.proxy.log.Println("error writing to log file:", err)
+	}
+	context.log_mutex.Unlock()
+}
+
+func (context * session_context) finalize_log()  {
+	context.append_to_log([]byte(",\n"))
+	context.log_session_data()
+	context.append_to_log([]byte("\n]"))
+	if err := context.log_fd.Close(); err != nil {
+		context.proxy.log.Println("error closing log file:", err)
+	}
+}
+
 
 func (context * session_context) new_signal() chan int {
 	new_msg_signal := make(chan int)
@@ -646,8 +768,10 @@ func newChannelWrapper(
 }
 
 type request_data struct {
-	req_type string
-	req_payload	[]byte
+	Req_type string	`json:"request_type"`
+	Req_payload	[]byte `json:"request_data"`
+	Msg_type	string  `json:"type"`
+	Offset		int64	`json:"offset"`
 }
 
 type channel_data struct {
@@ -662,6 +786,26 @@ type block_chunk struct {
 	Data []byte `json:"data"`
 }
 
+type window_message_extended struct {
+	Rows int64 `json:"rows"`
+	Columns int64 `json:"columns"`
+	Type string `json:"type"`
+	Offset int64 `json:"offset"`
+}
+
+
+type session_info_extended struct {
+	Start_time	int64 `json:"start"`
+	Stop_time	int64 `json:"stop"`
+	Length		int64 `json:"length"`
+	Client_host	string `json:"client_host"`
+	Serv_host   string `json:"server_host"`
+	Username	string `json:"username"`
+	Password    string `json:"password"`
+	Term_rows	uint32 `json:"term_rows"`
+	Term_cols	uint32 `json:"term_cols"`
+	Type		string `json:"type"`
+}
 
 // taken from 192-208: https://github.com/cmoog/sshproxy/blob/47ea68e82eaa4d43250d2a93c18fb26806cd67eb/reverseproxy.go#L192
 // channelRequestDest wraps the ssh.Channel type to conform with the standard SendRequest function signiture.

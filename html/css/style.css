@@ -1,0 +1,153 @@
+
+body,html 
+{
+    padding:0px;
+    margin:0px;
+    width:100%;
+    height:100%;
+
+    
+}
+body
+{
+    background-color:#191919;
+    display: flex;
+    flex-direction: column;
+}
+.inactive
+{
+    background-color:rgb(98, 98, 98)
+}
+
+.live
+{
+    background-color:rgb(98, 153, 98)
+}
+
+.old
+{
+    background-color:rgb(153, 98, 98)
+}
+
+a.selected
+{
+    background-color:#ccc;
+    color:#000;
+}
+
+#terminal_wrapper
+{
+    width:800px;
+    margin:0px auto;
+    text-align:center;
+    min-width:800px;
+    justify-content: center;
+    align-items: center;
+    display:flex;
+    flex-direction: column;
+    background-color:#444;
+    border:1px solid white;
+}
+
+#terminal
+{
+    display:inline-block;
+    height:400px;
+    width:100%;
+    margin:0px;
+    padding:0px;
+}
+#terminal_statusbar
+{
+    display:inline-block;
+    min-width:790px;
+    width:100%;
+    text-align:left;
+    margin:0px;
+    padding:10px;
+    box-sizing: border-box;
+}
+#keystrokes 
+{
+    min-width:800px;
+    width:100%;
+    height:100px;
+    color: #cfc;
+    border:1px solid white;
+    background: #000;
+    display:inline-block;
+    margin:0px;
+    padding:0px;
+    border:none;
+    outline:none;
+    resize:none;
+}
+
+div.session_list_container
+{
+    display:inline-block;
+    height:100%;
+    vertical-align:top;
+    width:50%;
+    float:left;
+    margin:0px;
+    padding:0px;
+    text-align:center;
+    flex:1;
+    overflow:auto;
+}
+
+div.session_list_container ul
+{
+    min-width:200px;
+    max-width:300px;
+    width:50%;
+    margin:0px auto;
+}
+
+div.list-container 
+{
+    height:100%;
+    margin:0px;
+    padding:0px;
+    background-color:blue;
+    flex:1;
+}
+
+div.session_list_container li
+{
+    list-style-type: none;
+    width:100%;
+    margin:5px;
+    background-color:#333;
+    color:#ddd;
+    display:inline-block;
+}
+
+div.session_list_container li a
+{
+    display:inline-block;
+    width:100%;
+    height:100%;
+    text-decoration: none;
+    font-weight:bold;
+    border: none;
+    padding:5px;
+
+}
+
+div.session_list_container li a:hover
+{
+    background-color:#ddd;
+    display:inline-block;
+    width:100%;
+    height:100%;
+    text-decoration: none;
+    color: #333;
+    font-weight:bold;
+}
+
+a
+{
+    color:#ddd;
+}
