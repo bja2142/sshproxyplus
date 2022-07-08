@@ -196,7 +196,7 @@ function init_session_tty(keyname,obj)
 {
     mark_selected(obj);
     reset_terminal()
-    let socket = new WebSocket("ws://"+get_base_host_addr()+"/socket")
+    let socket = new WebSocket(build_sock_addr()+"/socket")
     socket.onopen = function() {
         socket.send('get');
         socket.send(keyname);
