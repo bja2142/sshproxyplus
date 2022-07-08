@@ -42,6 +42,7 @@ var (
 
 const SIGNAL_SESSION_END int = 0
 const SIGNAL_NEW_MESSAGE int = 1
+const SESSION_LIST_FN	string = ".session_list"
 //const SIGNAL_RESIZE_WINDOW int = 2
 
 // a proxy context should be modular
@@ -61,6 +62,7 @@ type proxy_context struct {
 	override_password	string
 	override_user		string
 	web_listen_port		*int
+	server_version		*string
 }
 
 // session context
@@ -159,7 +161,7 @@ func start_proxy(context proxy_context) {
 		cur_session.mutex.Unlock()
 		return nil, nil
 	},
-//	ServerVersion: "OpenSSH_8.2p1 Ubuntu-4ubuntu0.5",
+	ServerVersion: *context.server_version,
 	BannerCallback: func(conn ssh.ConnMetadata) string {
 		return "bannerCallback"
 	},
@@ -196,9 +198,9 @@ func handle_channels(context * session_context, dest_conn ssh.Conn, channels <-c
 	context.thread_start()
 	defer context.thread_stop()
 	defer dest_conn.Close()
-	for cur_channel := range channels {
+	for this_channel := range channels {
 		// reset the var scope for each goroutine; taken from https://github.com/cmoog/sshproxy/blob/master/reverseproxy.go#L87
-		cur_channel := cur_channel
+		cur_channel := this_channel
 		go func() {
 			forward_channel(context, dest_conn, cur_channel)
 		}()
@@ -228,7 +230,7 @@ func forward_channel(context * session_context, dest_conn ssh.Conn, cur_channel 
 			_ = cur_channel.Reject(ssh.ConnectionFailed, err.Error())
 		}
 		
-		context.proxy.log.Printf("error open channel: %w\n", err)
+		context.proxy.log.Printf("error open channel: t:%v p:%v - %v\n", cur_channel.ChannelType(), cur_channel.ExtraData(),err)
 		return
 	}
 	context.proxy.log.Printf("Opening channel of type: %v\n", cur_channel.ChannelType())
@@ -261,7 +263,7 @@ func forward_channel(context * session_context, dest_conn ssh.Conn, cur_channel 
 func copy_channel(context * session_context, write_channel ssh.Channel, read_channel ssh.Channel, direction string, channel_type string) {
 	context.thread_start()
 	defer context.thread_stop()
-	defer func() { _ = write_channel.CloseWrite() }()
+	defer write_channel.CloseWrite()
 	done_copying := make(chan struct{})
 
 	go func() {
@@ -417,7 +419,7 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 		},
 
 	}
-	remote_sock, err := net.DialTimeout("tcp", remote_server_host, 3000000000)
+	remote_sock, err := net.DialTimeout("tcp", remote_server_host, 5000000000)
 	if err != nil {
 		context.log.Printf("Error: cannot connect to remote server %s\n",remote_server_host)
 		return
@@ -461,6 +463,7 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 	
 
 	<-shutdown_err
+	remote_conn.Close()
 	/*for cur_chan := range channels {
 		if cur_chan.ChannelType() != "session" {
 			context.log.Printf("rejecting channel of type: %v\n",cur_chan.ChannelType())
@@ -523,13 +526,14 @@ func init_proxy_context() proxy_context {
 	proxy_listen_ip   := flag.String("lip", "0.0.0.0", "ip for proxy to bind to")
 	proxy_key   := flag.String("lkey", "autogen", "private key for proxy to use; defaults to autogen new key")
 	log_file := flag.String("log", "-", "file to log to; defaults to stdout")
-	session_folder := flag.String("dir", ".", "directory to write sessions to; defaults to the current directory")
-
+	session_folder := flag.String("sess-dir", ".", "directory to write sessions to; defaults to the current directory")
 	tls_cert := flag.String("tls_cert", ".", "TLS certificate to use for web; defaults to plaintext")
 	tls_key := flag.String("tls_key", ".", "TLS key to use for web; defaults to plaintext")
 	override_user := flag.String("override-user", "", "Override client-supplied username when proxying to remote server")
 	override_password := flag.String("override-pass","","Overrides client-supplied password when proxying to remote server")
 	web_listen_port := flag.Int("web-port", 8080, "web server listen port; defaults to 8080")
+	server_version := flag.String("server-version", "SSH-2.0-OpenSSH_7.9p1 Raspbian-10", "server version to use")
+
 	flag.Parse()
 
 	init_logging(log_file)
@@ -595,7 +599,8 @@ func init_proxy_context() proxy_context {
 		tls_key,
 		*override_password,
 		*override_user,
-		web_listen_port}
+		web_listen_port,
+		server_version}
 }
 
 
@@ -638,28 +643,28 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 
 	if err == nil {
 		
-		time_elapsed := channel.context.get_time_offset()
+		//time_elapsed := channel.context.get_time_offset()
 		// reference: https://github.com/dutchcoders/sshproxy/blob/9b3ed8f5f5a7018c8dc09b4266e7f630683a9596/readers.go#L35
-		channel.context.proxy.log.Printf("dir: %v, type: %v, msec: %v, data(%v)\n", 
+		/*channel.context.proxy.log.Printf("dir: %v, type: %v, msec: %v, data(%v)\n", 
 		channel.direction, 
 		channel.data_type, 
 		time_elapsed, 
 		bytes_read, 
 		//string(buff[:bytes_read])
-	)
+	)*/
 
 		data_copy := make([]byte, bytes_read)
 	
 		copy(data_copy, buff)
 
-		new_chunk := block_chunk{
+		/*new_chunk := block_chunk{
 			Direction: channel.direction, 
 			Channel_type: channel.data_type, 
 			Time_offset: time_elapsed, 
 			Size: bytes_read, 
 			Data: data_copy,
-		}
-		channel.context.channels[channel.channel_id].chunks = append(channel.context.channels[channel.channel_id].chunks, new_chunk)
+		}*/
+		//channel.context.channels[channel.channel_id].chunks = append(channel.context.channels[channel.channel_id].chunks, new_chunk)
 		go channel.context.handleEvent(
 			&sessionEvent{
 				Type: EVENT_MESSAGE,
@@ -700,19 +705,39 @@ func (context * session_context) thread_start() {
 	context.mutex.Unlock()
 }
 
+func (context * session_context) add_session_to_session_list() {
+	filename := SESSION_LIST_FN
+	fd, err := os.OpenFile(*context.proxy.session_folder + "/" + filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		context.proxy.log.Println("error opening session list file:", err)
+	}
+	if _, err := fd.WriteString(context.session_info_as_JSON() + "\n"); err != nil {
+		context.proxy.log.Println("error writing to session list file:", err)
+	}
+	if err := fd.Close(); err != nil {
+		context.proxy.log.Println("error closing session list file:", err)
+	}
+	
+}
+
+func (context * session_context) end_session() {
+	context.active = false
+	context.stop_time = time.Now()
+	context.handleEvent(
+		&sessionEvent{
+			Type: EVENT_SESSION_STOP,
+			StopTime: context.getStopTimeAsUnix(),
+		})
+	context.signal_session_end()
+	context.finalize_log()
+	context.add_session_to_session_list()
+}
+
 func (context * session_context) thread_stop() {
 	context.mutex.Lock()
 	context.thread_count -= 1
 	if context.thread_count < 1 {
-		context.active = false
-		context.stop_time = time.Now()
-		context.handleEvent(
-			&sessionEvent{
-				Type: EVENT_SESSION_STOP,
-				StopTime: context.getStopTimeAsUnix(),
-			})
-		context.signal_session_end()
-		context.finalize_log()
+		context.end_session()
 	}
 	context.mutex.Unlock()
 }
@@ -729,7 +754,10 @@ func (context * session_context) session_info_as_JSON() string {
 		Password: 		context.client_password,
 		Term_rows:		context.term_rows,
 		Term_cols:		context.term_cols,
-		Type:			"session-metadata"}
+		Filename:		context.filename}
+	for _, request := range context.requests {
+		session_info.Requests = append(session_info.Requests, request.Req_type)
+	}
 	data, err := json.Marshal(session_info)
 	if err != nil {
 		context.proxy.log.Println("Error during marshaling json: ", err)
@@ -807,6 +835,14 @@ func (context * session_context) finalize_log()  {
 	context.append_to_log([]byte("\n]"))
 	if err := context.log_fd.Close(); err != nil {
 		context.proxy.log.Println("error closing log file:", err)
+	}
+	if(len(context.events)<10) {
+		old_file := *context.proxy.session_folder + "/" + context.filename
+		new_file := old_file + ".scan"
+		err := os.Rename(old_file,new_file)
+		if err != nil {
+			context.proxy.log.Printf("Error moving log file from %v to %v: %v",old_file, new_file, err)
+		}
 	}
 }
 
@@ -898,7 +934,8 @@ type session_info_extended struct {
 	Password    string `json:"password"`
 	Term_rows	uint32 `json:"term_rows"`
 	Term_cols	uint32 `json:"term_cols"`
-	Type		string `json:"type"`
+	Filename	string  `json:"filename"`
+	Requests	[]string `json:"requests"`
 }
 
 // taken from 192-208: https://github.com/cmoog/sshproxy/blob/47ea68e82eaa4d43250d2a93c18fb26806cd67eb/reverseproxy.go#L192
