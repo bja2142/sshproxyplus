@@ -154,7 +154,7 @@ function process_event(chunk,socket, callback = undefined)
     }
     
     if (chunk.type == "window-resize") {
-        resize_terminal(chunk.rows, chunk.columns)
+        resize_terminal(chunk.term_rows, chunk.term_cols)
         ack()
     } else if (chunk.type == "new-message") {
         if (chunk.direction == "incoming") {
