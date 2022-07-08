@@ -37,6 +37,24 @@ function init_query_socket() {
     }
 }
 
+function read_hashes()
+{
+    if(window.location.hash != "" && window.location.hash.indexOf("&") != -1)
+    {
+        hash_elements = window.location.hash.slice(1).split("&")
+        action_type = hash_elements[0]
+        action_key = hash_elements[1]
+        console.log(action_type,action_key)
+        if(action_type == "live") {
+            init_session_tty(action_key,jQuery("a[href*='"+window.location.hash+"']")[0])
+        } else if (action_type == "replay")
+        {
+            fetch_session('sessions/'+action_key,jQuery("a[href*='"+window.location.hash+"']")[0])
+        }
+    }
+    
+}
+
 
 function seconds_to_str(sec)
 {
@@ -52,7 +70,7 @@ function add_session_to_list(sessions)
         
         li = jQuery("<li />")
         anchor = jQuery("<a />")
-        anchor.attr("href","#")
+        anchor.attr("href","#live&"+session.key)
         anchor.attr("onclick","javascript:init_session_tty('"+session.key+"',this)")
         anchor.text(session.key + " (" + seconds_to_str(session.length) +")")
         if(session.key in active_session_sockets)
@@ -211,10 +229,17 @@ function init_session_tty(keyname,obj)
         statusbar_start(keyname,"live")
     }
     socket.onmessage = (event) => {
-        chunk = JSON.parse(event.data)
-        
+        try {
+            chunk = JSON.parse(event.data)
+            
+        } catch {
+            filename =keyname+".log.json";
+            url_hash = "#replay&"+filename
+            window.location.hash=url_hash
+            read_hashes()
+            return
+        }
         process_event(chunk,socket)
-        
     }
     socket.onclose = (event) =>
     {
@@ -304,7 +329,7 @@ function replay_session(data)
 function fetch_session(filepath,obj)
 {
     mark_selected(obj)
-    jQuery.getJSON(filepath, replay_session);
+    jQuery.getJSON(filepath, replay_session)
 }
 
 function fetch_old_session_list()
@@ -351,7 +376,7 @@ function add_old_session_to_list(obj)
     li = jQuery("<li />")
     anchor = jQuery("<a />")
     path = "sessions/"+filename
-    anchor.attr("href","#")
+    anchor.attr("href","#replay&"+filename)
     anchor.attr("onclick","javascript:fetch_session('sessions/"+filename+"',this)")
     anchor.text(anchor_text)
     if(path in active_queues)
