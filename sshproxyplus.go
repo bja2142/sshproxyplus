@@ -58,6 +58,9 @@ type proxy_context struct {
 	session_folder		*string
 	tls_cert			*string
 	tls_key				*string
+	override_password	string
+	override_user		string
+	web_listen_port		*int
 }
 
 // session context
@@ -97,7 +100,7 @@ func main() {
 
 	go start_proxy(cur_proxy)
 
-	go ServeWebSocketSessionServer("0.0.0.0:8080",*cur_proxy.tls_cert, *cur_proxy.tls_key)
+	go ServeWebSocketSessionServer("0.0.0.0:"+strconv.Itoa(*cur_proxy.web_listen_port),*cur_proxy.tls_cert, *cur_proxy.tls_key)
 
 	var input string
 	for {
@@ -396,11 +399,21 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 
 	remote_server_host := *context.server_ssh_ip +":"+strconv.Itoa(*context.server_ssh_port)
 
+	client_password := cur_session.client_password
+	if context.override_password != "" {
+		client_password = context.override_password
+	}
+
+	client_user     := client_conn.User()
+
+	if context.override_user != "" {
+		client_user = context.override_user
+	}
 	remote_server_conf := &ssh.ClientConfig{
-		User:            client_conn.User(),
+		User:            client_user,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Auth: []ssh.AuthMethod{
-			ssh.Password(cur_session.client_password),
+			ssh.Password(client_password),
 		},
 
 	}
@@ -514,6 +527,9 @@ func init_proxy_context() proxy_context {
 
 	tls_cert := flag.String("tls_cert", ".", "TLS certificate to use for web; defaults to plaintext")
 	tls_key := flag.String("tls_key", ".", "TLS key to use for web; defaults to plaintext")
+	override_user := flag.String("override-user", "", "Override client-supplied username when proxying to remote server")
+	override_password := flag.String("override-pass","","Overrides client-supplied password when proxying to remote server")
+	web_listen_port := flag.Int("web-port", 8080, "web server listen port; defaults to 8080")
 	flag.Parse()
 
 	init_logging(log_file)
@@ -576,7 +592,10 @@ func init_proxy_context() proxy_context {
 		Logger,
 		session_folder,
 		tls_cert,
-		tls_key}
+		tls_key,
+		*override_password,
+		*override_user,
+		web_listen_port}
 }
 
 
