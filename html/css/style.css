@@ -35,6 +35,12 @@ a.selected
     color:#000;
 }
 
+a.selected:visited
+{
+    background-color:#ccc;
+    color:#000;
+}
+
 #terminal_wrapper
 {
     width:800px;
@@ -125,12 +131,12 @@ div.session_list_container li
     width:100%;
     margin:5px;
     background-color:#333;
-    color:#ddd;
     display:inline-block;
 }
 
 div.session_list_container li a
 {
+    
     display:inline-block;
     width:100%;
     height:100%;
@@ -152,7 +158,16 @@ div.session_list_container li a:hover
     font-weight:bold;
 }
 
+a:visited
+{
+    color: #ccc;
+}
+
+a:active 
+{
+    color:#000;
+}
 a
 {
-    color:#ddd;
+    color:#9f9;
 }
