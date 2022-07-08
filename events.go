@@ -31,6 +31,7 @@ type sessionEvent struct {
 	TermRows		uint32 		`json:"term_rows,omitempty"`
 	TermCols		uint32 		`json:"term_cols,omitempty"`
 	ChannelType		string		`json:"channel_type,omitempty"`
+	ChannelData		[]byte		`json:"channel_data,omitempty"`
 	RequestType		string		`json:"request_type,omitempty"`
 	RequestPayload	[]byte		`json:"request_payload,omitempty"`
 }

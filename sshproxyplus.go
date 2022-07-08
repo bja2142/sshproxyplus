@@ -10,6 +10,7 @@ package main
 // - https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
 // - https://scalingo.com/blog/writing-a-replacement-to-openssh-using-go-12
 // - https://github.com/helloyi/go-sshclient/blob/master/sshclient.go
+// - https://gist.github.com/denji/12b3a568f092ab951456
 // for future reference: https://elliotchance.medium.com/how-to-create-an-ssh-tunnel-in-go-b63722d682aa
 import (
 	"fmt"
@@ -55,6 +56,8 @@ type proxy_context struct {
 	private_key			ssh.Signer
 	log					*log.Logger
 	session_folder		*string
+	tls_cert			*string
+	tls_key				*string
 }
 
 // session context
@@ -94,7 +97,7 @@ func main() {
 
 	go start_proxy(cur_proxy)
 
-	go ServeWebSocketSessionServer("0.0.0.0:8080")
+	go ServeWebSocketSessionServer("0.0.0.0:8080",*cur_proxy.tls_cert, *cur_proxy.tls_key)
 
 	var input string
 	for {
@@ -105,6 +108,15 @@ func main() {
 		fmt.Println("Enter q to quit.")
 	}
 
+}
+
+func channelTypeSupported(channelType string) bool {
+    switch channelType {
+    case
+        "session":
+        	return true
+    }
+    return false
 }
 
 // TODO: add methods to session_context so I can dump session data to file (json) or to stdout``
@@ -194,6 +206,17 @@ func handle_channels(context * session_context, dest_conn ssh.Conn, channels <-c
 func forward_channel(context * session_context, dest_conn ssh.Conn, cur_channel ssh.NewChannel) {
 	context.thread_start()
 	defer context.thread_stop()
+	context.handleEvent(
+		&sessionEvent{
+			Type: EVENT_NEW_CHANNEL,
+			ChannelType: cur_channel.ChannelType(),
+			ChannelData: cur_channel.ExtraData(),
+		})
+	if ! channelTypeSupported(cur_channel.ChannelType()) {
+		_ = cur_channel.Reject(ssh.ConnectionFailed, "Unable to open channel.")
+		context.proxy.log.Printf("Rejecting channel type: %v\n", cur_channel.ChannelType())
+		return
+	}
 	outgoing_channel, outgoing_requests, err := dest_conn.OpenChannel(cur_channel.ChannelType(), cur_channel.ExtraData())
 	if err != nil {
 		if openChanErr, ok := err.(*ssh.OpenChannelError); ok {
@@ -205,11 +228,6 @@ func forward_channel(context * session_context, dest_conn ssh.Conn, cur_channel 
 		context.proxy.log.Printf("error open channel: %w\n", err)
 		return
 	}
-	context.handleEvent(
-		&sessionEvent{
-			Type: EVENT_NEW_CHANNEL,
-			ChannelType: cur_channel.ChannelType(),
-		})
 	context.proxy.log.Printf("Opening channel of type: %v\n", cur_channel.ChannelType())
 	defer outgoing_channel.Close()
 
@@ -494,6 +512,8 @@ func init_proxy_context() proxy_context {
 	log_file := flag.String("log", "-", "file to log to; defaults to stdout")
 	session_folder := flag.String("dir", ".", "directory to write sessions to; defaults to the current directory")
 
+	tls_cert := flag.String("tls_cert", ".", "TLS certificate to use for web; defaults to plaintext")
+	tls_key := flag.String("tls_key", ".", "TLS key to use for web; defaults to plaintext")
 	flag.Parse()
 
 	init_logging(log_file)
@@ -537,6 +557,16 @@ func init_proxy_context() proxy_context {
 	}
 	Logger.Printf("Proxy using key with public key: %v\n",proxy_private_key.PublicKey().Marshal())
 
+	if _, err := os.Stat(*tls_key); errors.Is(err, os.ErrNotExist) {
+		dot := "."
+		tls_key = &dot
+		
+	}
+	if _, err := os.Stat(*tls_cert); errors.Is(err, os.ErrNotExist) {
+		dot := "."
+		tls_cert = &dot
+	}
+
 	return proxy_context{
 		server_ssh_port,
 		server_ssh_ip,
@@ -544,7 +574,9 @@ func init_proxy_context() proxy_context {
 		proxy_listen_port,
 		proxy_private_key,
 		Logger,
-		session_folder}
+		session_folder,
+		tls_cert,
+		tls_key}
 }
 
 
