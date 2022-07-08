@@ -309,30 +309,51 @@ function fetch_session(filepath,obj)
 
 function fetch_old_session_list()
 {
-    jQuery.get("/sessions",update_old_session_list);
+    jQuery.get("/sessions/.session_list",update_old_session_list);
 }
 
 function update_old_session_list(data)
 {
-    matches = data.matchAll(/href="([^"]*\.json)"/g)
-    let result = matches.next();
     jQuery("#old_session_list").empty();
-    while (!result.done) {
-        add_old_session_to_list(result.value[1])
-        result = matches.next();
+    lines = data.split("\n")
+    for (index=0; index<lines.length; index++)
+    {
+        line = lines[index]
+        if(line == "")
+        {
+            continue
+        }
+        session = JSON.parse(line)
+        if(session.filename.slice(-5)==".scan")
+        {
+            continue
+        }
+        add_old_session_to_list(session)
     }
     
 }
 
-function add_old_session_to_list(filename)
+function add_old_session_to_list(obj)
 {
+    filename = obj.filename
+    anchor_text = `${obj.client_host} - ${obj.length}s`
+    if(obj.requests)
+    {
+        if(obj.requests.includes("pty-req"))
+        {
+            anchor_text += " (pty)"
+        } else if (obj.requests.includes("exec"))
+        {
+            anchor_text += " (exec)"
+        }
+    }
 
     li = jQuery("<li />")
     anchor = jQuery("<a />")
     path = "sessions/"+filename
     anchor.attr("href","#")
     anchor.attr("onclick","javascript:fetch_session('sessions/"+filename+"',this)")
-    anchor.text( decodeURIComponent(filename))
+    anchor.text(anchor_text)
     if(path in active_queues)
     {
         anchor.addClass("selected");
