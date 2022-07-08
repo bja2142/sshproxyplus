@@ -1,10 +1,9 @@
 
 let dummy_socket = {
     send: function() {return;}, 
-    close: function() { statusbar_end(); }}
+    close: function() { return;}}
 var active_queues = {}
 var active_session_sockets = {}
-global_terminal_writeln = false
 
 function build_sock_addr()
 {
@@ -29,10 +28,10 @@ function init_query_socket() {
     
     socket.onopen = function() {
         jQuery("#active_session_list_container").removeClass("inactive").addClass("live")
-        socket.send('list');
+        socket.send('list-active');
         setInterval(function() {
             jQuery("#session_list").empty();
-            socket.send('list');},5000
+            socket.send('list-active');},5000
             )
         
     }
@@ -67,13 +66,18 @@ function add_session_to_list(sessions)
 
 function resize_terminal(rows, columns)
 {
-    new_height = parseInt(rows*global_row_height + 1)+ "px";
-    new_width = parseInt(columns*global_col_width + 1) + "px";
-    console.log("new dimensions",new_height,new_width)
-    jQuery("#terminal_wrapper").css("width", new_width)
-    jQuery("#terminal").css("width", new_width)
-    jQuery("#terminal").css("height", new_height)
-    global_fit_addon.fit()
+    new_height = parseInt(rows*global_row_height + 1)
+    new_width = parseInt(columns*global_col_width + 1)
+    if(new_height != NaN && new_width != NaN)
+    {
+        new_height = new_height+ "px";
+        new_width = new_width + "px";
+        console.log("new dimensions",new_height,new_width)
+        jQuery("#terminal_wrapper").css("width", new_width)
+        jQuery("#terminal").css("width", new_width)
+        jQuery("#terminal").css("height", new_height)
+        global_fit_addon.fit()
+    }   
 }
 
 
@@ -130,7 +134,7 @@ function process_outgoing(in_data)
     }
     for(index=0; index<data.length; index++)
     {
-        if (data.charCodeAt(index) < 0x20) {
+        if (data.charCodeAt(index) < 0x20 && data.charCodeAt(index) != 9 && data.charCodeAt(index) != 10) {
             data = data.substring(0,index) + "[\\" + data.charCodeAt(index) + "]" + data.substring(index+1,data.length)
         }
     }
@@ -138,41 +142,45 @@ function process_outgoing(in_data)
     jQuery("#keystrokes").scrollTop(jQuery("#keystrokes")[0].scrollHeight);
 }
 
-function process_event(chunk,socket)
+function process_event(chunk,socket, callback = undefined)
 {
+    console.log("process_event",chunk)
+    ack = function() {
+        if (callback != undefined)
+        {
+            callback()
+        }
+        socket.send('ack');
+    }
+    
     if (chunk.type == "window-resize") {
         resize_terminal(chunk.rows, chunk.columns)
-        socket.send('ack');
+        ack()
     } else if (chunk.type == "new-message") {
         if (chunk.direction == "incoming") {
             decoded_data = atob (chunk.data)
             console.log(decoded_data)
-            if (global_terminal_writeln) {
-                global_terminal.writeln(decoded_data +"<br>", () => { socket.send('ack'); })
-            } else 
-            {
-                global_terminal.write(decoded_data, () => { socket.send('ack'); })
-            }
-            
+            decoded_data = decoded_data.replace(/[\r\n]+/g, "\n").replace(/\n/g, "\r\n") 
+            global_terminal.write(decoded_data, () => { ack() })            
         } else if (chunk.direction == "outgoing") {
             decoded_data = atob (chunk.data)
             process_outgoing(decoded_data)
-            socket.send('ack');
+            ack()
         }
     } else if (chunk.type == "session-stop") {
-        socket.send('ack');
+        ack()
         statusbar_end()
         socket.close()
     } else if (chunk.type == "new-request") {
+        console.log(chunk)
         if (chunk.request_type == "exec") 
         {
             update_statusbar(" exec:"+atob(chunk.request_payload),true)
-            global_terminal_writeln = true
             
         }
-        socket.send('ack');
+        ack()
     } else {
-        socket.send('ack');
+        ack()
     }
 }
 
@@ -204,6 +212,7 @@ function init_session_tty(keyname,obj)
     }
     socket.onmessage = (event) => {
         chunk = JSON.parse(event.data)
+        
         process_event(chunk,socket)
         
     }
@@ -240,8 +249,10 @@ function process_event_queue(queue)
             delay = 0
         }
         
-        process_event(cur_event,dummy_socket)
-        setTimeout(function() {process_event_queue(queue);}, delay);
+        process_event(cur_event,dummy_socket, function() {
+            setTimeout(function() {process_event_queue(queue);}, delay);
+        })
+        
     }
 }
 
@@ -262,7 +273,6 @@ function reset_terminal()
         delete active_session_sockets[key]
      });
     global_terminal.reset()
-    global_terminal_writeln = false
 }
 
 function replay_session(data)
@@ -279,12 +289,6 @@ function replay_session(data)
             case "session-start":
                 session = Object.assign({}, session, blob);
                 break;
-            case "new-request":
-                session[blob.request_type] = blob.request_payload
-                break;
-            case "window-resize":
-                session = Object.assign({}, session, blob);
-                break;   
             default:
                 event_queue.push(blob)
                 break;
@@ -314,8 +318,6 @@ function update_old_session_list(data)
     let result = matches.next();
     jQuery("#old_session_list").empty();
     while (!result.done) {
-
-        console.log(result.value[1]);
         add_old_session_to_list(result.value[1])
         result = matches.next();
     }

@@ -111,6 +111,51 @@ func send_latest_events(prev_index int, new_index int, conn * websocket.Conn, ev
 	}
 }
 
+func getActiveSession(conn *websocket.Conn) bool {
+	_, session_keyname, err := conn.ReadMessage()
+	if err != nil {
+		log.Println("Error during message reading:", err)
+		return true
+	}
+	session := string(session_keyname)
+	fmt.Printf("selecting %v\n",session)
+	
+	if context, ok := SshSessions[session]; ok {
+		
+		last_event_index := 0
+		new_event_index := len(context.events)
+		fmt.Println("found session")
+		client_signal :=  context.new_signal()
+		fmt.Println("have signal")
+		//send_window_update(context.term_rows,context.term_cols, conn)
+		send_latest_events(last_event_index, 
+				new_event_index, conn, context.events)
+			
+		last_event_index = new_event_index				
+		for true {
+			switch <-client_signal {
+				case SIGNAL_SESSION_END:
+					fmt.Println("session ended")
+					return true
+				case SIGNAL_NEW_MESSAGE: 
+					fmt.Println("new message signal")
+					new_event_index := len(context.events)
+					send_latest_events(last_event_index, 
+						new_event_index, conn, context.events)
+					
+					last_event_index = new_event_index	
+				
+			}
+		}
+		fmt.Println("no more messages")
+	} else {
+		log.Println("could not find session %v\n",session)
+		conn.WriteMessage(websocket.TextMessage,[]byte("could not find session"))
+		return true
+	}
+
+	return false
+}
 
 func socketHandler(w http.ResponseWriter, r *http.Request) {
 	
@@ -131,9 +176,8 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
             log.Println("Error during message reading:", err)
             break
         }
-        log.Printf("Received: |%s|", message)
 		switch string(message) {
-			case "list":
+			case "list-active":
 				sessions_json, err := json.Marshal(getSessionInfo(true))
 				if err != nil {
 					log.Println("Error during marshaling json: ", err)
@@ -145,45 +189,7 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 					break
 				}
 			case "get":
-				_, session_keyname, err := conn.ReadMessage()
-				if err != nil {
-					log.Println("Error during message reading:", err)
-					break
-				}
-				session := string(session_keyname)
-				fmt.Printf("selecting %v\n",session)
-				
-				if context, ok := SshSessions[session]; ok {
-					
-					last_event_index := 0
-					new_event_index := len(context.events)
-					fmt.Println("found session")
-					client_signal :=  context.new_signal()
-					fmt.Println("have signal")
-					//send_window_update(context.term_rows,context.term_cols, conn)
-					send_latest_events(last_event_index, 
-							new_event_index, conn, context.events)
-						
-					last_event_index = new_event_index				
-					for true {
-						switch <-client_signal {
-							case SIGNAL_SESSION_END:
-								fmt.Println("session ended")
-								break
-							case SIGNAL_NEW_MESSAGE: 
-								fmt.Println("new message signal")
-								new_event_index := len(context.events)
-								send_latest_events(last_event_index, 
-									new_event_index, conn, context.events)
-								
-								last_event_index = new_event_index	
-							
-						}
-					}
-					fmt.Println("no more messages")
-				} else {
-					log.Println("could not find session %v\n",session)
-					conn.WriteMessage(websocket.TextMessage,[]byte("could not find session"))
+				if getActiveSession(conn) {
 					break
 				}
 				
