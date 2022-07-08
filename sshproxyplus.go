@@ -843,6 +843,7 @@ func (context * session_context) finalize_log()  {
 		if err != nil {
 			context.proxy.log.Printf("Error moving log file from %v to %v: %v",old_file, new_file, err)
 		}
+		context.filename = new_file
 	}
 }
 
