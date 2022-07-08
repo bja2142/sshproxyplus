@@ -365,20 +365,26 @@ func forward_request(context * session_context, outgoing_channel requestDest, re
 				TermCols: context.term_cols,
 			})
 		context.proxy.log.Printf("New window row:%v, col:%v\n", height,width)
-	} 
-	ok, product, err := outgoing_channel.SendRequest(request.Type, request.WantReply, request.Payload)
-	if err != nil {
+	}
+	if (request.Type == "no-more-sessions@openssh.com" || request.Type == "hostkeys-00@openssh.com" ) {
+		context.proxy.log.Printf("skipping: %v",request.Type);
+	} else {
+		ok, product, err := outgoing_channel.SendRequest(request.Type, request.WantReply, request.Payload)
+		if err != nil {
+			if request.WantReply {
+				if err := request.Reply(ok, product); err != nil {
+					return fmt.Errorf("reply after send failure: %w", err)
+				}
+			}
+			return fmt.Errorf("send request: %w", err)
+		}
+	
+	
+
 		if request.WantReply {
 			if err := request.Reply(ok, product); err != nil {
-				return fmt.Errorf("reply after send failure: %w", err)
+				return fmt.Errorf("reply: %w", err)
 			}
-		}
-		return fmt.Errorf("send request: %w", err)
-	}
-
-	if request.WantReply {
-		if err := request.Reply(ok, product); err != nil {
-			return fmt.Errorf("reply: %w", err)
 		}
 	}
 	return nil
