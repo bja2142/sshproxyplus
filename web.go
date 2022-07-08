@@ -211,11 +211,18 @@ func originChecker(r *http.Request) bool {
 var upgrader = websocket.Upgrader{
 	CheckOrigin: originChecker,
 } // use default options
-func ServeWebSocketSessionServer(host string) {
+func ServeWebSocketSessionServer(host string, tls_cert string, tls_key string) {
 
+	fs := http.FileServer(http.Dir("./html"))
+	http.Handle("/", fs)
 	http.HandleFunc("/socket", socketHandler)
-    http.HandleFunc("/", home)
+    //http.HandleFunc("/", home)
 
-	Logger.Printf("starting web socket server\n")
-    http.ListenAndServe(host, nil)
+	Logger.Printf("starting web socket server on %v\n",host)
+	if tls_cert != "." || tls_key != "." {
+		http.ListenAndServeTLS(host, tls_cert, tls_key,nil)
+	} else {
+		http.ListenAndServe(host, nil)
+	}
+    
 }

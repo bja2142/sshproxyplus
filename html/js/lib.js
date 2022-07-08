@@ -6,20 +6,17 @@ var active_queues = {}
 var active_session_sockets = {}
 global_terminal_writeln = false
 
-function get_base_host_addr()
+function build_sock_addr()
 {
-    base_host =  window.location.host.indexOf(":")
-    if (base_host != -1) {
-        base_host = window.location.host.substring(0,base_host)
-    } else {
-        base_host = window.location.host
-    }
-    base_host = base_host +":8080"
-    return base_host
+    addr = window.location.origin
+
+    addr = addr.replace("https://","wss://")
+    addr = addr.replace("http://","ws://")
+    return addr
 }
 
 function init_query_socket() {
-    let socket = new WebSocket("ws://"+get_base_host_addr()+"/socket")
+    let socket = new WebSocket(build_sock_addr()+"/socket")
     socket.onmessage = (event) => {
     
         add_session_to_list(JSON.parse(event.data))
@@ -64,7 +61,7 @@ function add_session_to_list(sessions)
             anchor.addClass("selected")
         }
         li.append(anchor)
-        jQuery("#session_list").append(li)
+        jQuery("#session_list").prepend(li)
     }
 }
 
@@ -339,6 +336,6 @@ function add_old_session_to_list(filename)
         anchor.addClass("selected");
     }
     li.append(anchor)
-    jQuery("#old_session_list").append(li)
+    jQuery("#old_session_list").prepend(li)
 
 }

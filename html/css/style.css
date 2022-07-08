@@ -94,13 +94,14 @@ div.session_list_container
     padding:0px;
     text-align:center;
     flex:1;
+    max-height:100%;
     overflow:auto;
 }
 
 div.session_list_container ul
 {
-    min-width:200px;
-    max-width:300px;
+    min-width:300px;
+    max-width:500px;
     width:50%;
     margin:0px auto;
 }
@@ -108,10 +109,13 @@ div.session_list_container ul
 div.list-container 
 {
     height:100%;
+    max-height:100%;
     margin:0px;
     padding:0px;
     background-color:blue;
     flex:1;
+    overflow: hidden;
+    
 }
 
 div.session_list_container li
