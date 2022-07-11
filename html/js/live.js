@@ -1,13 +1,15 @@
 
-var global_terminal;
+var terminal_reader;
 var global_row_height;
 var global_col_width;
 var global_fit_addon;
 jQuery.noConflict()
 jQuery(document).ready(function() {
-    init_query_socket();
+    terminal_reader = new TerminalReader("terminal_reader")
+    terminal_reader.initialize()
+    //init_query_socket();
     fetch_old_session_list();
-    global_terminal = new Terminal({convertEol: true});
+    /*global_terminal = new Terminal({convertEol: true});
     const fitAddon = new FitAddon.FitAddon();
     global_terminal.loadAddon(fitAddon);
     global_terminal.open(document.getElementById('terminal'));
@@ -22,6 +24,7 @@ jQuery(document).ready(function() {
     
     global_fit_addon = fitAddon;
     setInterval(fetch_old_session_list,10*1000);
-    read_hashes()
+    read_hashes()*/
+
 });
 
