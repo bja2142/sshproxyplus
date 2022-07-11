@@ -304,8 +304,8 @@ function replay_session(data)
 {
     console.log(this.url)
     console.log(data)
-    reset_terminal()
-    var session = {requests: []}
+    terminal_reader.reset()
+    var session = {requests: [],feed_type: "old"}
     var event_queue = []
     for(index=0; index<data.length; index++)
     {
@@ -315,15 +315,17 @@ function replay_session(data)
                 session = Object.assign({}, session, blob);
                 break;
             default:
-                event_queue.push(blob)
+                event_queue.push(new TerminalEvent(blob))
                 break;
         }
     }
-    resize_terminal(session.term_rows, session.term_columns)
     active_queues[this.url]= event_queue
     console.log(session)
-    statusbar_start(`From: ${session.client_host}; To: ${session.server_host};`,"old")
-    process_event_queue(event_queue)
+    //statusbar_start(`From: ${session.client_host}; To: ${session.server_host};`,"old")
+    //process_event_queue(event_queue)
+    terminal_reader.load_events(event_queue)
+    terminal_reader.update_session(session)
+    terminal_reader.play()
 }
 
 function fetch_session(filepath,obj)

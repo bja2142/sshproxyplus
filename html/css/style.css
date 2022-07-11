@@ -41,7 +41,7 @@ a.selected:visited
     color:#000;
 }
 
-#terminal_wrapper
+.terminal_reader
 {
     width:800px;
     margin:0px auto;
@@ -55,15 +55,15 @@ a.selected:visited
     border:1px solid white;
 }
 
-#terminal
+.terminal_reader div.terminal-box
 {
     display:inline-block;
-    height:400px;
+    height:300px;
     width:100%;
     margin:0px;
     padding:0px;
 }
-#terminal_statusbar
+.terminal_reader h4.statusbar
 {
     display:inline-block;
     min-width:790px;
@@ -73,7 +73,7 @@ a.selected:visited
     padding:10px;
     box-sizing: border-box;
 }
-#keystrokes 
+.terminal_reader .keystrokes 
 {
     min-width:800px;
     width:100%;
@@ -82,6 +82,7 @@ a.selected:visited
     border:1px solid white;
     background: #000;
     display:inline-block;
+    font-family:"Courier New";
     margin:0px;
     padding:0px;
     border:none;
