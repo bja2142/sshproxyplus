@@ -51,7 +51,7 @@ a.selected:visited
     align-items: center;
     display:flex;
     flex-direction: column;
-    background-color:#444;
+    
     border:1px solid white;
 }
 
@@ -89,6 +89,83 @@ a.selected:visited
     outline:none;
     resize:none;
 }
+
+.terminal_reader .controlbar
+{
+    height:30px;
+    width:100%;
+    display:inline-block;
+    margin:0px;
+    padding:0px;
+}
+
+.terminal_reader .controlbar .statusbar
+{
+    display:inline-block;
+    background-color:green;
+}
+
+
+.terminal_reader div.media_buttons .button
+{
+    padding-bottom:5px;
+    display:inline-block;
+    width:35px;
+    height:60px;
+    background-repeat:no-repeat;
+    cursor:pointer;
+    background-image:url('../img/icon-set-player.png');
+    padding:2px;
+    margin:0px;
+}
+
+.terminal_reader div.media_buttons
+{
+    display:inline-block;
+    float:left;
+}
+
+.terminal_reader div.media_buttons .pause
+{
+    background-position: -40px -45px;
+}
+
+.terminal_reader div.media_buttons .play
+{
+    background-position: -45px -5px;
+}
+
+.terminal_reader div.media_buttons .prev
+{
+    background-position: 0px -5px;
+}
+
+.terminal_reader div.media_buttons .next
+{
+    background-position: -85px -5px;
+}
+
+.terminal_reader div.media_buttons .slower
+{
+    background-position: 0px -10px;
+    background-repeat:no-repeat;
+    width:45px;
+    background-image:url('../img/turtle_hare.png');
+}
+
+.terminal_reader div.media_buttons .faster
+{
+    display:relative;
+    top:-5px;
+    background-position: -40px 0px;
+    background-size:auto 25px;
+    background-repeat:no-repeat;
+    background-clip:padding-box;
+    width:45px;
+    background-image:url('../img/turtle_hare.png');
+}
+
+
 
 div.session_list_container
 {

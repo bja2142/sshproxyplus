@@ -30,6 +30,7 @@ class TerminalReader {
     #event_index
     #cur_event
     #timeout = -1
+    #timeout_delay_speed = 1
     #timeout_delay = 0
     #timeout_timestamp = 0
     #timeout_delay_saved = 0
@@ -38,6 +39,9 @@ class TerminalReader {
     #terminal_element
     #keystrokes
     #reader_element
+    #controlbar
+    #controlbar_status
+    #controlbar_interval
 
     #session = {}
 
@@ -61,8 +65,9 @@ class TerminalReader {
         this.#reader_element = jQuery("#"+this.element_id)
         this.reader_element.empty()
         this.reader_element.addClass("terminal_reader")
+        this.reader_element.addClass("inactive")
 
-        this.#statusbar = jQuery('<h4 class="statusbar inactive">Currently Displaying: <span>Nothing</span></h4>')
+        this.#statusbar = jQuery('<h4 class="statusbar">Currently Displaying: <span>Nothing</span></h4>')
         this.reader_element.append(this.statusbar)
 
         this.#terminal_element = jQuery('<div></div>')
@@ -70,11 +75,77 @@ class TerminalReader {
         this.terminal_element.addClass("terminal-box")
         this.reader_element.append(this.terminal_element)
 
+        this.#controlbar = jQuery('<div class="controlbar"></div>')
+        //buttons
+
+        var self = this
+
+        // add dropdown menu for input events
+
+        // add a slider on top
+
+        var media_buttons = jQuery('<div></div>').addClass("media_buttons")
+        
+        //slow
+        media_buttons.append(jQuery('<span></span>')
+            .addClass("slower").addClass("button")
+            .click(function() {self.decrease_speed()})
+        )
+
+        //prev
+        media_buttons.append(jQuery('<span></span>')
+            .addClass("prev").addClass("button")
+            .click(function() {self.prev()})
+        )
+
+        //pause
+        media_buttons.append(jQuery('<span></span>')
+            .addClass("pause").addClass("button")
+            .click(function() {self.pause()})
+        )
+
+        //play
+        media_buttons.append(jQuery('<span></span>')
+            .addClass("play").addClass("button")
+            .click(function() {self.play()})
+        )
+
+        //next
+        media_buttons.append(jQuery('<span></span>')
+            .addClass("next").addClass("button")
+            .click(function() {self.next()})
+        )
+
+        //fast
+        media_buttons.append(jQuery('<span></span>')
+            .addClass("faster").addClass("button")
+            .click(function() {self.increase_speed()})
+        )
+        
+        this.controlbar.append(media_buttons)
+
+        this.controlbar.addClass("controlbar")
+
+        this.#controlbar_status = jQuery('<div></div>')
+            .addClass("statusbar")
+        this.controlbar.append(this.controlbar_status)
+
+        this.reader_element.append(this.controlbar)
+
         this.#keystrokes = jQuery('<div></div>')
         this.keystrokes.addClass("keystrokes")
         this.keystrokes.attr("placeholder","Session input goes here...")
         this.reader_element.append(this.keystrokes)
         
+        this.#controlbar_interval = setInterval(function(){self.update_controlbar_status()},250)
+    }
+
+    update_controlbar_status()
+    {
+        var msg = `Event: ${this.event_index}; Next: ${this.time_to_next_event}ms; Speed: ${((this.speed*1.0)+"").slice(0,5)}`
+        this.controlbar_status.empty().text(msg)
+
+        //update slider
     }
 
     get ended()
@@ -94,6 +165,12 @@ class TerminalReader {
     {
         return this.#keystrokes
     }
+
+    get controlbar_status()
+    {
+        return this.#controlbar_status
+    }
+
     get terminal_element()
     {
         return this.#terminal_element
@@ -101,6 +178,11 @@ class TerminalReader {
     get statusbar()
     {
         return this.#statusbar
+    }
+
+    get controlbar()
+    {
+        return this.#controlbar
     }
 
     get terminal_id()
@@ -203,6 +285,7 @@ class TerminalReader {
                 var delay = next_event.time_offset - this.#cur_event.time_offset
                 delay = delay / this.speed
                 delay = parseInt(delay.toFixed())
+                this.#timeout_delay_speed = this.speed
                 
             } else {
                 delay = 0;
@@ -214,6 +297,7 @@ class TerminalReader {
         self.#timeout = setTimeout(function() {
             self.process_next_event(); },delay);
         this.#timeout_delay = delay
+        
         this.#timeout_timestamp = Date.now()
         
     }
@@ -264,10 +348,10 @@ class TerminalReader {
         if(this.ended)
         {
             statusbar_text += " (ended)"
-            this.statusbar.removeClass("live old inactive").addClass("inactive")
+            this.reader_element.removeClass("live old inactive").addClass("inactive")
 
         } else {
-            this.statusbar.removeClass("live old inactive").addClass(session_type)
+            this.reader_element.removeClass("live old inactive").addClass(session_type)
             if (this.paused)
              {
                 statusbar_text += " (paused)"
@@ -322,7 +406,10 @@ class TerminalReader {
     }
     process_next_event(callback=undefined)
     {
-        
+        if(this.paused)
+        {
+            return
+        }
         var ack = function() {
             if (callback != undefined)
             {
@@ -350,24 +437,51 @@ class TerminalReader {
         return this.#terminal
     }
 
+    get timeout_delay_speed() 
+    {
+        return this.#timeout_delay_speed
+    }
+    
+    resume_with_new_delay()
+    {
+        var new_delay = parseInt(this.timeout_delay_speed * this.timeout_delay_saved / this.speed)
+        this.start_timer_for_next_event(new_delay)
+        this.#timeout_delay_saved= new_delay
+        this.#timeout_delay_speed = this.speed
+    }
+
     redo_next_event()
     {
-        var delay = self.time_to_next_event
-        this.reset_timeout()
-        this.start_timer_for_next_event(this.timeout_delay_saved)
-        this.#timeout_delay_saved= 0
+        this.reset_timeout(false)
+        this.resume_with_new_delay()
     }
 
-    increase_speed(amount=0.25)
+    increase_speed(amount=0.3)
     {
-        this.#speed += amount
-        this.redo_next_event()
+        if(!this.paused)
+        {
+            this.pause()
+            this.#speed = amount+this.speed
+            this.play()
+        }
+        else
+        {
+            this.#speed = amount+this.speed
+        }
+
     }
 
-    decrease_speed(amount=0.25)
+    decrease_speed(amount=0.3)
     {
-        this.#speed -= amount
-        this.redo_next_event()
+        if(this.paused)
+        {
+            this.#speed = Math.max(this.speed-amount,0.1)
+        } else {
+            this.pause()
+            this.#speed = Math.max(this.speed-amount,0.1)
+            this.play()
+        }
+        
     }
 
     get speed()
@@ -380,7 +494,7 @@ class TerminalReader {
         return this.#event_index
     }
 
-    reset_timeout()
+    reset_timeout(clear_delay_speed=true)
     {
         if(this.#timeout != -1)
         {
@@ -390,27 +504,60 @@ class TerminalReader {
         this.#timeout_delay_saved = this.time_to_next_event
         this.#timeout_delay = 0
         this.#timeout_timestamp = 0
+        if(clear_delay_speed)
+        {
+            this.#timeout_delay_speed = 1
+        }
+        
     }
+
     next()
     {
         this.reset_timeout()
+        if(this.paused)
+        {
+            var cur_event = this.events[this.#event_index]
+            this.action_event(cur_event,function(){})
+            this.#event_index++
+        } else {
+            this.process_next_event()
+        }
         
-        
-        this.process_next_event()
     }
 
     pause()
     {
         this.#paused = true
-        this.reset_timeout()
+        this.reset_timeout(false)
+        this.refresh_statusbar()
         
+    }
+
+    prev()
+    {
+        this.pause()
+        var scroll_Y= parseInt(this.terminal.buffer._normal.viewportY)
+        this.terminal.reset()
+        this.#keystrokes.empty()
+        var new_index = Math.max(0,this.event_index-2)
+        console.log
+        for (var event_index = 0; event_index <= new_index; event_index++)
+        {
+            var cur_event = this.events[event_index]
+            var self= this
+            this.action_event(cur_event,function(){})
+        }
+        this.terminal.write("");
+        this.terminal.scrollToLine(scroll_Y);
+        this.#event_index = new_index+1;
+        this.refresh_statusbar()
     }
 
     play()
     {
         this.#paused = false
-        this.start_timer_for_next_event(this.timeout_delay_saved)
-        this.#timeout_delay_saved= 0
+        this.resume_with_new_delay()
+        this.refresh_statusbar()
     }
     get paused()
     {
