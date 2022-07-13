@@ -395,6 +395,10 @@ class TerminalReader {
         var data = this.process_keystrokes(in_data)
         var new_text = document.createTextNode(data)
         this.keystrokes.append(new_text);
+        if(this.session.terminal_type == "exec")
+        {
+            this.keystrokes.append(jQuery("<br />"))
+        }
         this.keystrokes.scrollTop(this.keystrokes[0].scrollHeight);
         if(callback!=undefined)
         {
@@ -436,7 +440,7 @@ class TerminalReader {
             if (event.request_type == "exec") 
             {
                 this.#session.terminal_type = "exec"
-                this.#keystroke_buffer += atob(event.request_payload) +="\n"
+                this.#keystroke_buffer += atob(event.request_payload) 
             } else if (event.request_type == "pty-req") {
                 this.#session.terminal_type = "pty"
             }
