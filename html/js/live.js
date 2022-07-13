@@ -7,7 +7,7 @@ jQuery.noConflict()
 jQuery(document).ready(function() {
     terminal_reader = new TerminalReader("terminal_reader")
     terminal_reader.initialize()
-    //init_query_socket();
+    init_query_socket();
     fetch_old_session_list();
     /*global_terminal = new Terminal({convertEol: true});
     const fitAddon = new FitAddon.FitAddon();
