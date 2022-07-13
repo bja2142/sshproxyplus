@@ -241,14 +241,17 @@ function init_session_tty(keyname,obj)
             return
         }
         console.log("loading",chunk,terminal_reader.events.length)
-        terminal_reader.load_events([chunk])
+        terminal_reader.load_events(new TerminalEvent(chunk))
         console.log(terminal_reader.events.length)
+
         var pass_socket = socket
         terminal_reader.process_next_event(function() {
             pass_socket.send('ack');
-            console.log("back has been called")
         });
-        console.log("on_message returning")
+        if(chunk.type=="session-stop")
+        {
+            socket.close()
+        }
     }
     socket.onclose = (event) =>
     {

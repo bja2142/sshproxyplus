@@ -70,9 +70,31 @@ a.selected:visited
     width:100%;
     text-align:left;
     margin:0px;
-    padding:10px;
+    padding:3px;
+    padding-left:5px;
     box-sizing: border-box;
+    font-weight:normal;
+    font-size:1em;
+    padding-top:2px;
 }
+
+.terminal_reader h4.statusbar div.rightdiv
+{
+    float:right;
+    width:100px;
+    padding-top:5px;
+    padding-right:8px;
+    text-align:right;
+}
+
+/*
+.terminal_reader h4.statusbar span
+{
+    display:inline-block;
+    text-align:left;
+    vertical-align:center;
+    padding-top:5px;
+}*/
 .terminal_reader .keystrokes 
 {
     min-width:800px;
@@ -93,79 +115,150 @@ a.selected:visited
 
 .terminal_reader .controlbar
 {
-    height:30px;
+    height:28px;
     width:100%;
-    display:inline-block;
+    display:flex;
     margin:0px;
     padding:0px;
 }
 
-.terminal_reader .controlbar .statusbar
+.terminal_reader .controlbar .rightdiv
 {
-    display:inline-block;
+    position:relative;
+    top:-5px;
+    display:block;
+    float:right;
+    width:280px;
+    text-align:left;
+    overflow:visible;    
+    padding:0px;
+    margin:0px;
+}
+
+.terminal_reader .controlbar .leftdiv
+{
+    position:relative;
+    top:-5px;
+    display:block;
+    float:left;
+    width:54px;
+    text-align:right;
+    overflow:visible;    
+    padding:0px;
+    margin:0px;
+}
+
+.terminal_reader .session-slider
+{
+    margin:0px 20px;
+    width:fit-content;
+    flex:content;
     vertical-align:center;
-    font-size:1.1em;
-    margin:5px;
+}
+
+.terminal_reader h4.statusbar a
+{
+    color:#000;
+    text-decoration:none;
+    font-weight:bolder;
 }
 
 
-.terminal_reader div.media_buttons .button
+.terminal_reader div.media_buttons .button, .terminal_reader div.speed_buttons .button
 {
-    padding-bottom:5px;
     display:inline-block;
-    width:35px;
-    height:60px;
+    width:30px;
+    height:30px;
     background-repeat:no-repeat;
     cursor:pointer;
-    background-image:url('../img/icon-set-player.png');
-    padding:2px;
+    background-image:url('../img/sprites.png');
+    background-size:300px 30px;
+    padding:0px;
     margin:0px;
 }
 
 .terminal_reader div.media_buttons
 {
-    display:inline-block;
+    display:block;
     float:left;
+    
+    padding-left:8px;
+    
 }
 
-.terminal_reader div.media_buttons .pause
+.terminal_reader div.speed_buttons input
 {
-    background-position: -40px -45px;
+    border:1px solid white;
+    background-color:#000;
+    color:#fff;
+    height:24px;
+    position:relative;
+    top:-12px;
 }
 
-.terminal_reader div.media_buttons .play
+.terminal_reader div.speed_buttons input.speed_box
 {
-    background-position: -45px -5px;
+    width:40px;
+    margin-right:2px;
 }
 
-.terminal_reader div.media_buttons .prev
+.terminal_reader div.speed_buttons input.event_index_box
 {
-    background-position: 0px -5px;
+    margin-right:2px;
+    width:30px;
+    border:none;
 }
 
-.terminal_reader div.media_buttons .next
+.terminal_reader div.speed_buttons input.delay_box
 {
-    background-position: -85px -5px;
+    margin-right:2px;
+    width:50px;
+    border:none;
 }
 
-.terminal_reader div.media_buttons .slower
+.terminal_reader div.speed_buttons .pause
 {
-    background-position: 0px -10px;
-    background-repeat:no-repeat;
-    width:45px;
-    background-image:url('../img/turtle_hare.png');
+    background-position: -240px 0px;
 }
 
-.terminal_reader div.media_buttons .faster
+.terminal_reader div.speed_buttons .play
 {
-    display:relative;
-    top:-5px;
-    background-position: -40px 0px;
-    background-size:auto 25px;
-    background-repeat:no-repeat;
-    background-clip:padding-box;
-    width:45px;
-    background-image:url('../img/turtle_hare.png');
+    background-position: 0px 0px;
+    width:20px;
+}
+
+.terminal_reader div.speed_buttons .prev
+{
+    background-position: -180px 0px;
+}
+
+.terminal_reader div.speed_buttons .next
+{
+    background-position: -150px 0px;
+}
+
+.terminal_reader div.speed_buttons .slower
+{
+    background-position: -120px 0px;
+    width:28px;
+}
+
+.terminal_reader div.speed_buttons .faster
+{
+    background-position: -30px 0px;
+}
+
+.terminal_reader div.speed_buttons .to-end
+{
+    background-position: -60px 0px;
+    width:22px;
+}
+
+.terminal_reader div.speed_buttons .to-start
+{
+    margin-left:2px;
+    background-position: -90px 0px;
+    width:22px;
 }
 
 

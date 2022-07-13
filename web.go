@@ -190,6 +190,7 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 			case "get":
 				if getActiveSession(conn) {
+					log.Println("breaking from loop")
 					break
 				}
 				
@@ -201,6 +202,7 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 				}
 		}
 	}
+	Logger.Printf("ending session with client")
 }
 
 func home(w http.ResponseWriter, r *http.Request) {

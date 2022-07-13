@@ -36,6 +36,7 @@ class TerminalReader {
     #timeout_delay_saved = 0
     #terminal_buffer = ""
     #keystroke_buffer = ""
+    #session_slider 
 
     #statusbar
     #terminal_element
@@ -62,14 +63,39 @@ class TerminalReader {
         this.initialize_terminal()
     }
 
+    build_media_buttons()
+    {
+        var cur_media_reader = this
+        var media_buttons = jQuery('<div></div>').addClass("media_buttons")
+        
+        
+
+
+
+
+
+        return media_buttons
+    }
+
+    get session_slider()
+    {
+        return this.#session_slider;
+    }
+
     build_reader()
     {
+        var cur_media_reader = this
+        var self = this
         this.#reader_element = jQuery("#"+this.element_id)
         this.reader_element.empty()
         this.reader_element.addClass("terminal_reader")
         this.reader_element.addClass("inactive")
 
-        this.#statusbar = jQuery('<h4 class="statusbar">Currently Displaying: <span>Nothing</span></h4>')
+        this.#statusbar = jQuery('<h4 class="statusbar"><span>Currently Displaying: Nothing</span><div class="rightdiv"></div></h4>')
+       
+        var media_buttons = this.build_media_buttons()
+        this.statusbar.prepend(media_buttons)
+
         this.reader_element.append(this.statusbar)
 
         this.#terminal_element = jQuery('<div></div>')
@@ -78,59 +104,97 @@ class TerminalReader {
         this.reader_element.append(this.terminal_element)
 
         this.#controlbar = jQuery('<div class="controlbar"></div>')
-        //buttons
-
-        var self = this
+        
 
         // add dropdown menu for input events
 
-        // add a slider on top
+        // should show current event being executed
 
-        var media_buttons = jQuery('<div></div>').addClass("media_buttons")
         
-        //slow
-        media_buttons.append(jQuery('<span></span>')
-            .addClass("slower").addClass("button")
-            .click(function() {self.decrease_speed()})
-        )
-
-        //prev
-        media_buttons.append(jQuery('<span></span>')
-            .addClass("prev").addClass("button")
-            .click(function() {self.prev()})
-        )
-
-        //pause
-        media_buttons.append(jQuery('<span></span>')
-            .addClass("pause").addClass("button")
-            .click(function() {self.pause()})
-        )
-
-        //play
-        media_buttons.append(jQuery('<span></span>')
-            .addClass("play").addClass("button")
-            .click(function() {self.play()})
-        )
-
-        //next
-        media_buttons.append(jQuery('<span></span>')
-            .addClass("next").addClass("button")
-            .click(function() {self.next()})
-        )
-
-        //fast
-        media_buttons.append(jQuery('<span></span>')
-            .addClass("faster").addClass("button")
-            .click(function() {self.increase_speed()})
-        )
-        
-        this.controlbar.append(media_buttons)
 
         this.controlbar.addClass("controlbar")
 
+        this.#session_slider = jQuery('<div></div>')
+        this.session_slider.addClass("session-slider")
+        var self = this;
+        this.session_slider.slider({
+            min:0,
+            max:self.events.length,
+            change: function( event, ui ) {
+                if(self.event_index != ui.value)
+                {
+                    console.log(self.event_index, ui.value)
+                    console.log("moving_to_event")
+                    self.move_to_event(ui.value);
+                }
+                
+            }
+        });
+
+        var left_media = jQuery('<div></div>')
+            .addClass("leftdiv").addClass("speed_buttons")
+        
+
+        //beginning
+        left_media.append(jQuery('<span></span>')
+            .addClass("to-start button")
+            .click(function() {cur_media_reader.move_to_event(0)})
+        )
+
+        //prev
+        left_media.append(jQuery('<span></span>')
+            .addClass("prev button") 
+            .click(function() {cur_media_reader.prev()})
+        )
+        
+
         this.#controlbar_status = jQuery('<div></div>')
-            .addClass("statusbar")
+            .addClass("rightdiv").addClass("speed_buttons")
+
+
+        this.controlbar_status.append(jQuery('<span></span>')
+            .addClass("next button")
+            .click(function() {cur_media_reader.next()})
+        )
+
+        this.controlbar_status.append(jQuery('<span></span>')
+            .addClass("to-end button")
+            .click(function() {cur_media_reader.move_to_event(cur_media_reader.events.length-1)})
+        )
+        this.controlbar_status.append(
+                jQuery('<span></span>')
+                .addClass("pause button")
+                .click(function(event) {cur_media_reader.toggle_play_pause(event.target)})
+            )
+        this.controlbar_status.append(
+                jQuery('<input type="textbox" class="event_index_box">')
+                .attr("value","-1")
+            )
+        this.controlbar_status.append(
+                jQuery('<input type="textbox" class="delay_box">')
+                .attr("value","0s")
+            )
+        this.controlbar_status.append(
+                jQuery('<span></span>')
+                .addClass("slower").addClass("button")
+                .click(function() {cur_media_reader.decrease_speed()})
+            )
+        this.controlbar_status.append(
+                jQuery('<input type="textbox" class="speed_box">')
+                .attr("value",this.speed)
+                .change(function(event){console.log(event.target.value);self.update_speed(event.target.value)})
+            )
+        this.controlbar_status.append(
+                jQuery('<span></span>')
+                .addClass("faster").addClass("button")
+                .click(function() {cur_media_reader.increase_speed()})
+            )
+
+        
+        this.controlbar.append(left_media)
+        this.controlbar.append(this.session_slider)
         this.controlbar.append(this.controlbar_status)
+        
 
         this.reader_element.append(this.controlbar)
 
@@ -144,8 +208,12 @@ class TerminalReader {
 
     update_controlbar_status()
     {
-        var msg = `Event: ${this.event_index}; Next: ${this.time_to_next_event}ms; Speed: ${((this.speed*1.0)+"").slice(0,5)}`
-        this.controlbar_status.empty().text(msg)
+        this.#controlbar.children("div.rightdiv.speed_buttons").children("input.event_index_box").attr("value",this.event_index)
+        this.#controlbar.children("div.rightdiv.speed_buttons").children("input.delay_box").attr("value",`${this.time_to_next_event}s`)
+
+        this.session_slider.slider("option","value",this.event_index)
+        //var msg = `Event: ${this.event_index}; Next: ${this.time_to_next_event}ms`
+        //this.controlbar_status.empty().text(msg)
 
         //update slider
     }
@@ -234,6 +302,7 @@ class TerminalReader {
     load_events(events)
     {
         this.#events = this.#events.concat(events)
+        this.session_slider.slider("option","max",this.events.length)
     }
 
     resize_by_pixels(width,height)
@@ -264,10 +333,14 @@ class TerminalReader {
         this.#session = { live: false, feed_type: "old"}
     }
 
-    reset()
+    reset(update_speed=false)
     {
         this.#paused = false
-        this.#speed = 1;
+        if(update_speed)
+        {
+            this.update_speed(1.0);
+        }
+        
         this.reset_timeout()
         this.reset_session()
         this.refresh_statusbar()
@@ -364,27 +437,34 @@ class TerminalReader {
     refresh_statusbar()
     {
         var session_type = this.#session.feed_type
-        var statusbar_text = `From: ${this.client};  To: ${this.host};`
+        var session_link = jQuery("<a></a>")
+        var statusbar_text = ""
+        session_link.attr("href",`sessions/${this.session.key}.log.json`)
+        session_link.attr("target", "_new")
+        session_link.text(`${this.client} -> ${this.host}`)
         if(this.ended)
         {
-            statusbar_text += " (ended)"
+            statusbar_text += " (ended"
             this.reader_element.removeClass("live old inactive").addClass("inactive")
 
         } else {
             this.reader_element.removeClass("live old inactive").addClass(session_type)
             if (this.paused)
              {
-                statusbar_text += " (paused)"
+                statusbar_text += " (paused"
             } else {
-                statusbar_text += " (playing)"
+                statusbar_text += " (playing"
             }
         }
         if(this.session.terminal_type != undefined)
         {
-            statusbar_text += ` - (${this.session.terminal_type})`
+            statusbar_text += `: ${this.session.terminal_type}`
         }
-        this.statusbar.empty()
-        this.statusbar.text(statusbar_text)
+        statusbar_text += ")"
+        var bar_span = this.statusbar.children('span')
+        bar_span.empty()
+        bar_span.append(session_link)
+        bar_span.append(statusbar_text)
         
         // draw statusbar here
     }
@@ -433,19 +513,22 @@ class TerminalReader {
                 this.#terminal_buffer += decoded_data      
             } else if (event.direction == "outgoing") {
                 var decoded_data = atob (event.data)
-                this.#keystroke_buffer += decoded_data
+                if(decoded_data != '\x00')
+                {
+                    this.#keystroke_buffer += decoded_data
+                }
             }
         } else if (event.type == "new-request") {
             
             if (event.request_type == "exec") 
             {
                 this.#session.terminal_type = "exec"
-                this.#keystroke_buffer += atob(event.request_payload) 
+                this.#keystroke_buffer += atob(event.request_payload).substring(4) 
+                
             } else if (event.request_type == "pty-req") {
                 this.#session.terminal_type = "pty"
             }
         } 
-
     }
     write_buffers(callback=undefined,always_callback=true)
     {
@@ -479,9 +562,21 @@ class TerminalReader {
         this.#session["feed_type"] = "live"
 
     }
+    update_speed(in_val)
+    {
+        var val = parseFloat(in_val)
+        if(isNaN(val))
+        {
+            return;
+        }
+        this.#speed = val;
+        this.#controlbar.children("div.rightdiv.speed_buttons").children("input.speed_box").attr("value",val)
+    }
     set_session_mode_disconnected()
     {
         this.#session["live"] = false
+        this.#session["feed_type"] = "old"
+        this.refresh_statusbar()
     }
     process_next_event(callback=undefined)
     {
@@ -564,18 +659,22 @@ class TerminalReader {
         this.resume_with_new_delay()
     }
 
-    increase_speed(amount=0.3)
+    change_speed_to_new_val(new_val)
     {
-        if(!this.paused)
+        if(this.paused)
         {
+            this.update_speed(new_val)
+        } else {
             this.pause()
-            this.#speed = amount+this.speed
+            this.update_speed(new_val)
             this.play()
         }
-        else
-        {
-            this.#speed = amount+this.speed
-        }
+    }
+
+    increase_speed(amount=0.3)
+    {
+        var new_val = amount+this.speed;
+        this.change_speed_to_new_val(new_val)
 
     }
 
@@ -591,15 +690,8 @@ class TerminalReader {
 
     decrease_speed(amount=0.3)
     {
-        if(this.paused)
-        {
-            this.#speed = Math.max(this.speed-amount,0.1)
-        } else {
-            this.pause()
-            this.#speed = Math.max(this.speed-amount,0.1)
-            this.play()
-        }
-        
+        var new_val = this.#speed = Math.max(this.speed-amount,0.1)
+        this.change_speed_to_new_val(new_val)
     }
 
     get speed()
@@ -653,18 +745,23 @@ class TerminalReader {
     pause()
     {
         this.#paused = true
+        this.show_play();
         this.reset_timeout(false)
         this.refresh_statusbar()
         
     }
 
-    prev()
+    move_to_event(event_id, dont_play=true)
     {
+        if(event_id < 0 || event_id > this.events.length-1 || parseInt(event_id) == this.event_index)
+        {
+            return;
+        }
+        var was_paused = this.#paused;
         this.pause()
-        var scroll_Y= parseInt(this.terminal.buffer._normal.viewportY)
         this.terminal.reset()
         this.#keystrokes.empty()
-        var new_index = Math.max(0,this.event_index-2)
+        var new_index = event_id 
         //console.log
         for (var event_index = 0; event_index <= new_index; event_index++)
         {
@@ -681,10 +778,42 @@ class TerminalReader {
         },true);
         this.#event_index = new_index+1;
         this.refresh_statusbar()
+        if(!was_paused && !dont_play)
+        {
+            this.play()
+        }
+    }
+    prev()
+    {
+       var new_id = Math.max(0,this.event_index-2);
+       this.move_to_event(new_id)
+    }
+
+    show_pause()
+    {
+        jQuery(".terminal_reader .play").removeClass("play").addClass("pause")
+    }
+
+    show_play()
+    {
+        jQuery(".terminal_reader .pause").removeClass("pause").addClass("play")
+    }
+
+    toggle_play_pause(obj)
+    {
+        console.log(obj)
+        var button = jQuery(obj)
+        if(button.hasClass("play"))
+        {
+            this.play()
+        } else {
+            this.pause()
+        }
     }
 
     play()
     {
+        this.show_pause();
         this.#paused = false
         this.resume_with_new_delay()
         this.refresh_statusbar()
