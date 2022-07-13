@@ -34,6 +34,8 @@ class TerminalReader {
     #timeout_delay = 0
     #timeout_timestamp = 0
     #timeout_delay_saved = 0
+    #terminal_buffer = ""
+    #keystroke_buffer = ""
 
     #statusbar
     #terminal_element
@@ -150,7 +152,7 @@ class TerminalReader {
 
     get ended()
     {
-        return this.#event_index >= this.#events.length
+        return (this.#event_index >= this.#events.length && this.is_live == false)
     }
     get timeout_delay_saved()
     {
@@ -199,6 +201,16 @@ class TerminalReader {
         this.#terminal_row_height = parseInt(this.terminal_element.css("height").slice(0,-2)) / this.terminal.rows
     }
 
+    get terminal_row_height()
+    {
+        return this.#terminal_row_height
+    }
+
+    get terminal_col_width()
+    {
+        return this.#terminal_col_width
+    }
+
     fit_terminal()
     {
         this.#fit_addon.fit()
@@ -221,7 +233,7 @@ class TerminalReader {
     }
     load_events(events)
     {
-        this.#events = this.events.concat(events)
+        this.#events = this.#events.concat(events)
     }
 
     resize_by_pixels(width,height)
@@ -232,7 +244,7 @@ class TerminalReader {
         this.terminal_element.css("width", new_width)
         this.terminal_element.css("height", new_height)
         this.#fit_addon.fit()
-        console.log("new dimensions",new_height,new_width)
+        //console.log("new dimensions",new_height,new_width)
     }
 
     resize(rows,cols)
@@ -249,11 +261,12 @@ class TerminalReader {
 
     reset_session()
     {
-        this.#session = {}
+        this.#session = { live: false, feed_type: "old"}
     }
 
     reset()
     {
+        this.#paused = false
         this.#speed = 1;
         this.reset_timeout()
         this.reset_session()
@@ -262,6 +275,13 @@ class TerminalReader {
         this.keystrokes.empty()
         this.clear_events()
         this.resize_by_pixels(this.initial_width,this.initial_height)
+        this.clear_buffers()
+    }
+
+    clear_buffers()
+    {
+        this.#terminal_buffer = ""
+        this.#keystroke_buffer = ""
     }
 
     clear_events()
@@ -273,15 +293,15 @@ class TerminalReader {
 
     start_timer_for_next_event(in_delay=-1)
     {
-        console.log("start timer")
+        //console.log("start timer")
         if(in_delay == -1) {       
             if (this.events.length > this.#event_index+1)
             {
-                console.log("doit")
+                //console.log("doit")
                 var next_event_index = this.#event_index+1
                 var next_event = this.#events[next_event_index]
-                console.log(next_event) 
-                console.log(this.#cur_event)
+                //console.log(next_event) 
+                //console.log(this.#cur_event)
                 var delay = next_event.time_offset - this.#cur_event.time_offset
                 delay = delay / this.speed
                 delay = parseInt(delay.toFixed())
@@ -312,7 +332,7 @@ class TerminalReader {
     {
         var signal_chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         var data = in_data
-        console.log(convertToHex(data))
+        //console.log(convertToHex(data))
         for(index=0; index<replace_list.length; index++)
         {
             data = data.replace(replace_list[index][0],replace_list[index][1])
@@ -359,62 +379,125 @@ class TerminalReader {
                 statusbar_text += " (playing)"
             }
         }
+        if(this.session.terminal_type != undefined)
+        {
+            statusbar_text += ` - (${this.session.terminal_type})`
+        }
         this.statusbar.empty()
         this.statusbar.text(statusbar_text)
         
         // draw statusbar here
     }
 
-    write_keystrokes(in_data)
+    write_keystroke_buffer(callback=undefined)
     {
+        var in_data = this.#keystroke_buffer
         var data = this.process_keystrokes(in_data)
         var new_text = document.createTextNode(data)
         this.keystrokes.append(new_text);
         this.keystrokes.scrollTop(this.keystrokes[0].scrollHeight);
+        if(callback!=undefined)
+        {
+            callback();
+        }
+        this.#keystroke_buffer = ""
     }
-    action_event(event,callback)
+    write_terminal_buffer(callback=undefined)
     {
-        console.log(event)
-        
-        if (event.type == "window-resize") {
+        if(callback == undefined)
+        {
+            callback = function() {}
+        }
+        this.terminal.write(this.#terminal_buffer,callback());
+        this.#terminal_buffer = ""
+    }
+    action_event(event)
+    {
+      
+        if(event.type == "session-start")
+        {
+            delete event.type
+            this.update_session(event)
+        } else if (event.type == "window-resize") {
+            delete event.type
+            this.update_session(event)
             this.resize(event.term_rows, event.term_cols)
-            callback()
         } else if (event.type == "new-message") {
             if (event.direction == "incoming") {
                 var decoded_data = atob (event.data)
                 decoded_data = decoded_data.replace(/[\r\n]+/g, "\n").replace(/\n/g, "\r\n") 
-                this.terminal.write(decoded_data, callback)            
+                this.#terminal_buffer += decoded_data      
             } else if (event.direction == "outgoing") {
                 var decoded_data = atob (event.data)
-                this.write_keystrokes(decoded_data)
-                callback()
+                this.#keystroke_buffer += decoded_data
             }
-        } else if (event.type == "session-stop") {
-            callback()
         } else if (event.type == "new-request") {
             
             if (event.request_type == "exec") 
             {
                 this.#session.terminal_type = "exec"
-                this.write_keystrokes(atob(event.request_payload))
+                this.#keystroke_buffer += atob(event.request_payload)
+            } else if (event.request_type == "pty-req") {
+                this.#session.terminal_type = "pty"
             }
-            callback()
-        } else {
-            callback()
-        }
+        } 
 
+    }
+    write_buffers(callback=undefined,always_callback=true)
+    {
+        //console.log(this.keystroke_buffer,this.terminal_buffer,always_callback)
+        if(callback == undefined)
+        {
+            callback = function() {}
+        }
+        if(this.#terminal_buffer != "")
+        {
+            if(this.#keystroke_buffer != "")
+            {
+                this.write_keystroke_buffer()
+            }
+            this.write_terminal_buffer(callback)
+        } else if(this.#keystroke_buffer != "") {
+            if(always_callback)
+            {
+                this.write_keystroke_buffer(callback)
+            } else {
+                this.write_keystroke_buffer()
+            }
+            
+        } else {
+            callback()            
+        }
+    }
+    set_session_mode_live()
+    {
+        this.#session["live"] = true
+        this.#session["feed_type"] = "live"
+
+    }
+    set_session_mode_disconnected()
+    {
+        this.#session["live"] = false
     }
     process_next_event(callback=undefined)
     {
-        if(this.paused)
+        if (callback == undefined)
+        {
+            callback = function() {}
+        }
+        //console.log("paused:",this.paused)
+        if(this.paused && ! this.is_live)
         {
             return
         }
-        var ack = function() {
-            if (callback != undefined)
-            {
-                callback()
-            }
+        var self = this
+        var callback = callback
+            
+        var internal_callback = function() {
+            self.start_timer_for_next_event()
+            self.#event_index++
+            callback()
+            
         }
         if (this.event_index == -1)
         {
@@ -423,15 +506,36 @@ class TerminalReader {
         if (this.#events.length > this.#event_index)
         {
             this.#cur_event = this.#events[this.#event_index]
-            this.action_event(this.#cur_event, ack)            
-            this.start_timer_for_next_event()
-            this.#event_index++
+            //console.log(this.#cur_event)
+            this.action_event(this.#cur_event)
+            if(!this.paused)
+            {
+                this.write_buffers(internal_callback,true)
+            } else {
+                callback()
+                this.clear_buffers()
+            }
+            
+            
         } else {
-            this.pause()
+            if(this.is_live == false)
+            {
+                //console.log("pausing")
+                this.pause()
+            } else {
+                callback()
+            }
         }
         this.refresh_statusbar()
     }
 
+    get session() {
+        return this.#session
+    }
+
+    get is_live() {
+        return this.session.live
+    }
     get terminal() 
     {
         return this.#terminal
@@ -471,6 +575,16 @@ class TerminalReader {
 
     }
 
+    get keystroke_buffer()
+    {
+        return this.#keystroke_buffer
+    }
+
+    get terminal_buffer()
+    {
+        return this.#terminal_buffer
+    }
+
     decrease_speed(amount=0.3)
     {
         if(this.paused)
@@ -498,7 +612,7 @@ class TerminalReader {
     {
         if(this.#timeout != -1)
         {
-            clearTimeout(this.#timeout)
+            //clearTimeout(this.#timeout)
             this.#timeout = -1
         }
         this.#timeout_delay_saved = this.time_to_next_event
@@ -513,16 +627,23 @@ class TerminalReader {
 
     next()
     {
+        if(this.#event_index< this.events.length)
+        {
         this.reset_timeout()
         if(this.paused)
         {
-            var cur_event = this.events[this.#event_index]
-            this.action_event(cur_event,function(){})
-            this.#event_index++
-        } else {
-            this.process_next_event()
+           
+                var cur_event = this.events[this.#event_index]
+                this.action_event(cur_event,function(){})
+                this.write_buffers()
+                this.#event_index++
+                
+                
+            } else {
+                this.process_next_event()
+            }
         }
-        
+        this.refresh_statusbar()
     }
 
     pause()
@@ -540,15 +661,20 @@ class TerminalReader {
         this.terminal.reset()
         this.#keystrokes.empty()
         var new_index = Math.max(0,this.event_index-2)
-        console.log
+        //console.log
         for (var event_index = 0; event_index <= new_index; event_index++)
         {
             var cur_event = this.events[event_index]
             var self= this
-            this.action_event(cur_event,function(){})
+            this.action_event(cur_event)
         }
-        this.terminal.write("");
-        this.terminal.scrollToLine(scroll_Y);
+        var self = this
+        var scroll_Y= parseInt(this.terminal.buffer._normal.viewportY)
+
+        this.write_buffers(function(){
+            self.terminal.scrollToBottom();
+            setTimeout(function(){self.terminal.scrollToBottom();},25);
+        },true);
         this.#event_index = new_index+1;
         this.refresh_statusbar()
     }

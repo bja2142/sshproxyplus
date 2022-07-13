@@ -88,6 +88,7 @@ a.selected:visited
     border:none;
     outline:none;
     resize:none;
+    overflow:auto;
 }
 
 .terminal_reader .controlbar
@@ -102,7 +103,9 @@ a.selected:visited
 .terminal_reader .controlbar .statusbar
 {
     display:inline-block;
-    background-color:green;
+    vertical-align:center;
+    font-size:1.1em;
+    margin:5px;
 }
 
 

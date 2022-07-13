@@ -188,7 +188,7 @@ function process_event(chunk,socket, callback = undefined)
     } else if (chunk.type == "session-stop") {
         ack()
         statusbar_end()
-        socket.close()
+        //socket.close()
     } else if (chunk.type == "new-request") {
         console.log(chunk)
         if (chunk.request_type == "exec") 
@@ -221,12 +221,13 @@ function mark_selected(obj)
 function init_session_tty(keyname,obj)
 {
     mark_selected(obj);
-    reset_terminal()
+    terminal_reader.reset()
     let socket = new WebSocket(build_sock_addr()+"/socket")
     socket.onopen = function() {
+        terminal_reader.set_session_mode_live()
         socket.send('get');
         socket.send(keyname);
-        statusbar_start(keyname,"live")
+        
     }
     socket.onmessage = (event) => {
         try {
@@ -239,11 +240,20 @@ function init_session_tty(keyname,obj)
             read_hashes()
             return
         }
-        process_event(chunk,socket)
+        console.log("loading",chunk,terminal_reader.events.length)
+        terminal_reader.load_events([chunk])
+        console.log(terminal_reader.events.length)
+        var pass_socket = socket
+        terminal_reader.process_next_event(function() {
+            pass_socket.send('ack');
+            console.log("back has been called")
+        });
+        console.log("on_message returning")
     }
     socket.onclose = (event) =>
     {
-        statusbar_end()
+        console.log("session socket closing")
+        terminal_reader.set_session_mode_disconnected()
     }
     active_session_sockets[keyname] = socket
 }
@@ -294,6 +304,7 @@ function reset_terminal()
         delete active_queues[key]
      });
     Object.keys(active_session_sockets).forEach(function(key) {
+        console.log("resetting terminal")
         active_session_sockets[key].close();
         delete active_session_sockets[key]
      });
