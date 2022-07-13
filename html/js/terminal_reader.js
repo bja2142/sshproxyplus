@@ -436,7 +436,7 @@ class TerminalReader {
             if (event.request_type == "exec") 
             {
                 this.#session.terminal_type = "exec"
-                this.#keystroke_buffer += atob(event.request_payload)
+                this.#keystroke_buffer += atob(event.request_payload) +="\n"
             } else if (event.request_type == "pty-req") {
                 this.#session.terminal_type = "pty"
             }
