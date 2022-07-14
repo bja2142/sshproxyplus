@@ -22,9 +22,9 @@ jQuery(document).ready(function() {
     global_row_height = 
         parseInt(jQuery("#terminal").css("height").slice(0,-2)) / global_terminal.rows 
     
-    global_fit_addon = fitAddon;
+    global_fit_addon = fitAddon;*/
     setInterval(fetch_old_session_list,10*1000);
-    read_hashes()*/
+    read_hashes()
 
 });
 
