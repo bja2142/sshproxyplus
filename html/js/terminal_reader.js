@@ -161,14 +161,15 @@ class TerminalReader {
             .addClass("to-end button")
             .click(function() {cur_media_reader.move_to_event(cur_media_reader.events.length-1)})
         )
+        
+        this.controlbar_status.append(
+                jQuery('<input type="textbox" class="event_index_box">')
+                .attr("value","-1")
+            )
         this.controlbar_status.append(
                 jQuery('<span></span>')
                 .addClass("pause button")
                 .click(function(event) {cur_media_reader.toggle_play_pause(event.target)})
-            )
-        this.controlbar_status.append(
-                jQuery('<input type="textbox" class="event_index_box">')
-                .attr("value","-1")
             )
         this.controlbar_status.append(
                 jQuery('<input type="textbox" class="delay_box">')
@@ -209,7 +210,7 @@ class TerminalReader {
     update_controlbar_status()
     {
         this.#controlbar.children("div.rightdiv.speed_buttons").children("input.event_index_box").attr("value",this.event_index)
-        this.#controlbar.children("div.rightdiv.speed_buttons").children("input.delay_box").attr("value",`${this.time_to_next_event}s`)
+        this.#controlbar.children("div.rightdiv.speed_buttons").children("input.delay_box").attr("value",`${parseFloat(this.time_to_next_event / 1000).toFixed(2)}s`)
 
         this.session_slider.slider("option","value",this.event_index)
         //var msg = `Event: ${this.event_index}; Next: ${this.time_to_next_event}ms`
@@ -360,7 +361,7 @@ class TerminalReader {
     clear_events()
     {
         this.#events = []
-        this.#event_index = -1;
+        this.#event_index = 0;
         this.#cur_event = undefined
     }
 

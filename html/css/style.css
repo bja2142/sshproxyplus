@@ -219,12 +219,13 @@ a.selected:visited
 .terminal_reader div.speed_buttons .pause
 {
     background-position: -240px 0px;
+    width:28px;
 }
 
 .terminal_reader div.speed_buttons .play
 {
     background-position: 0px 0px;
-    width:20px;
+    width:28px;
 }
 
 .terminal_reader div.speed_buttons .prev
@@ -251,7 +252,7 @@ a.selected:visited
 .terminal_reader div.speed_buttons .to-end
 {
     background-position: -60px 0px;
-    width:22px;
+    width:23px;
 }
 
 .terminal_reader div.speed_buttons .to-start
