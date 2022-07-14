@@ -120,7 +120,7 @@ class TerminalReader {
         this.session_slider.slider({
             min:0,
             max:self.events.length,
-            change: function( event, ui ) {
+            slide: function( event, ui ) {
                 if(self.event_index != ui.value)
                 {
                     console.log(self.event_index, ui.value)
@@ -760,11 +760,20 @@ class TerminalReader {
         }
         var was_paused = this.#paused;
         this.pause()
-        this.terminal.reset()
+        var event_index;
+        if(event_id > this.event_index)
+        {
+            event_index = this.event_index;
+        } else 
+        {
+            this.terminal.reset()
+            event_index = 0;
+        }
+        
         this.#keystrokes.empty()
         var new_index = event_id 
         //console.log
-        for (var event_index = 0; event_index <= new_index; event_index++)
+        for (; event_index <= new_index; event_index++)
         {
             var cur_event = this.events[event_index]
             var self= this
