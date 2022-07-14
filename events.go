@@ -44,23 +44,23 @@ func (event sessionEvent) toJSON() []byte {
 	return data
 }
 
-func (context * session_context) getStartTimeAsUnix() int64 {
+func (context * sessionContext) getStartTimeAsUnix() int64 {
 	return context.start_time.Unix()
 }
 
-func (context * session_context) getStopTimeAsUnix() int64 {
+func (context * sessionContext) getStopTimeAsUnix() int64 {
 	return context.start_time.Unix()
 }
 
-func (session * session_context) addEvent(event *sessionEvent) *sessionEvent{
-	event.TimeOffset = session.get_time_offset()
+func (session * sessionContext) addEvent(event *sessionEvent) *sessionEvent{
+	event.TimeOffset = session.getTimeOffset()
 	session.event_mutex.Lock()
 	session.events = append(session.events, event)
 	session.event_mutex.Unlock()
 	return event
 }
 
-func (session * session_context) logEvent(event *sessionEvent) {
+func (session * sessionContext) logEvent(event *sessionEvent) {
 	json_data, err := json.Marshal(event)
 	if err != nil {
 		session.proxy.log.Println("Error during marshaling json: ", err)
@@ -74,11 +74,11 @@ func (session * session_context) logEvent(event *sessionEvent) {
 		data = []byte(",\n" + string(json_data))
 	}
 	
-	session.append_to_log(data)
+	session.appendToLog(data)
 }
 
-func (session * session_context) handleEvent(event *sessionEvent) {
+func (session * sessionContext) handleEvent(event *sessionEvent) {
 	updated_event := session.addEvent(event)
 	session.logEvent(updated_event)
-	session.signal_new_message()
+	session.signalNewMessage()
 }

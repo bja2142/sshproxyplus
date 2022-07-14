@@ -164,7 +164,9 @@ class TerminalReader {
         
         this.controlbar_status.append(
                 jQuery('<input type="textbox" class="event_index_box">')
-                .attr("value","-1")
+                .attr("value","0")
+                .focusin(function() { cur_media_reader.pause()})
+                .focusout(function(event) { cur_media_reader.move_to_event(parseInt(event.target.value));})
             )
         this.controlbar_status.append(
                 jQuery('<span></span>')
@@ -174,6 +176,7 @@ class TerminalReader {
         this.controlbar_status.append(
                 jQuery('<input type="textbox" class="delay_box">')
                 .attr("value","0s")
+                .attr("readonly","readonly")
             )
         this.controlbar_status.append(
                 jQuery('<span></span>')
@@ -754,7 +757,7 @@ class TerminalReader {
 
     move_to_event(event_id, dont_play=true)
     {
-        if(event_id < 0 || event_id > this.events.length-1 || parseInt(event_id) == this.event_index)
+        if(isNaN(event_id) || event_id < 0 || event_id > this.events.length-1 || parseInt(event_id) == this.event_index)
         {
             return;
         }

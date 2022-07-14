@@ -125,7 +125,7 @@ func getActiveSession(conn *websocket.Conn) bool {
 		last_event_index := 0
 		new_event_index := len(context.events)
 		fmt.Println("found session")
-		client_signal :=  context.new_signal()
+		client_signal :=  context.makeNewSignal()
 		fmt.Println("have signal")
 		//send_window_update(context.term_rows,context.term_cols, conn)
 		send_latest_events(last_event_index, 
