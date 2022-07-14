@@ -2,7 +2,7 @@
 let dummy_socket = {
     send: function() {return;}, 
     close: function() { return;}}
-var active_queues = {}
+var active_queue = ""
 var active_session_sockets = {}
 
 function build_sock_addr()
@@ -298,14 +298,14 @@ function reset_terminal()
 {
     jQuery("#keystrokes").empty();
     console.log("cleared")
-    Object.keys(active_queues).forEach(function(key) {
-        cur_queue = active_queues[key]
-        while(cur_queue.length > 0)
-        {
-            cur_queue.pop()
-        }
-        delete active_queues[key]
-     });
+
+    cur_queue = active_queue
+    while(cur_queue.length > 0)
+    {
+        cur_queue.pop()
+    }
+    active_queue = ""
+     
     Object.keys(active_session_sockets).forEach(function(key) {
         console.log("resetting terminal")
         active_session_sockets[key].close();
@@ -333,7 +333,7 @@ function replay_session(data)
                 break;
         }
     }
-    active_queues[this.url]= event_queue
+    active_queue = this.url
     console.log(session)
     //statusbar_start(`From: ${session.client_host}; To: ${session.server_host};`,"old")
     //process_event_queue(event_queue)
@@ -395,7 +395,7 @@ function add_old_session_to_list(obj)
     anchor.attr("href","#replay&"+filename)
     anchor.attr("onclick","javascript:fetch_session('sessions/"+filename+"',this)")
     anchor.text(anchor_text)
-    if(path in active_queues)
+    if(path == active_queue)
     {
         anchor.addClass("selected");
     }
