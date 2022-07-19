@@ -36,12 +36,12 @@ type sessionEvent struct {
 	RequestPayload	[]byte		`json:"request_payload,omitempty"`
 }
 
-func (event sessionEvent) toJSON() []byte {
-	data, err := json.Marshal(event)
-	if err == nil {
+func (event *sessionEvent) toJSON() string {
+	data, err := json.Marshal(*event)
+	if err != nil {
 		data = []byte("")
 	}
-	return data
+	return string(data)
 }
 
 func (context * sessionContext) getStartTimeAsUnix() int64 {

@@ -149,7 +149,7 @@ func getActiveSession(conn *websocket.Conn) bool {
 		}
 		fmt.Println("no more messages")
 	} else {
-		log.Println("could not find session %v\n",session)
+		log.Printf("could not find session %v\n",session)
 		conn.WriteMessage(websocket.TextMessage,[]byte("could not find session"))
 		return true
 	}
@@ -219,6 +219,9 @@ func originChecker(r *http.Request) bool {
 var upgrader = websocket.Upgrader{
 	CheckOrigin: originChecker,
 } // use default options
+
+// TODO: make the session folder and the html server folders consistent
+// with the proxy parameters 
 func ServeWebSocketSessionServer(host string, tls_cert string, tls_key string) {
 
 	fs := http.FileServer(http.Dir("./html"))
