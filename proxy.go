@@ -3,25 +3,29 @@ package main
 
 import (
 	"golang.org/x/crypto/ssh"
-	"log"
 	"time"
 	"net"
 	"strconv"
 	"os"
+	"errors"
 )
 
+const SESSION_LIST_FN	string = ".session_list"
+const ACTIVE_POLLING_DELAY time.Duration = 500* time.Millisecond
 
-// a proxy context should be modular
-// so that multiple proxies can be run in the same
-// program with separate contexts, including
-// logging
+
+// a proxy runs on a single port
+// it can support username/password
+// combinations and redirect each
+// combination to a different remote
+// host
 type proxyContext struct {
 	server_ssh_port		*int
 	server_ssh_ip		*string
 	listen_ip			*string
 	listen_port			*int
 	private_key			ssh.Signer
-	log					*log.Logger
+	log					loggerInterface
 	session_folder		*string
 	tls_cert			*string
 	tls_key				*string
@@ -29,21 +33,50 @@ type proxyContext struct {
 	override_user		string
 	web_listen_port		*int
 	server_version		*string
+	Users 				map[string]*proxyUser
+	sessions			map[string]map[string]*sessionContext
+	RequireValidPassword	bool
+	active				bool
+	public_access		bool
+	viewers				map[string]*proxySessionViewer
+	// when there are new sessions, block forwarding until this is true
 }
 
+type loggerInterface interface {
+	Printf(format string, v ...any)
+	Println(v ...any)
+}
 
-func (proxy proxyContext) startProxy() {
+// TODO: update authentication routine to 
+// check users list and only authorize
+// if user is in list
+// should also include default user option
+
+
+func (proxy *proxyContext) startProxy() {
 	proxy.log.Printf("Starting proxy on socket %v:%v\n", *proxy.listen_ip, *proxy.listen_port)
 	config := &ssh.ServerConfig{
 	NoClientAuth: false,
 	MaxAuthTries: 3,
 	PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
+		
 		proxy.log.Printf("Got client (%s) using creds (%s:%s)\n",
 		conn.RemoteAddr(),
 		conn.User(),
 		password)
-		sess_key := conn.LocalAddr().String()+":"+conn.RemoteAddr().String()
+
+		//TODO: make session_key unique with a counter
+
+		err, user := proxy.authenticateUser(conn.User(),string(password))
+
+		if(err != nil) {
+			proxy.log.Printf("authentication failed: %v\n",err)
+			return nil, err
+		}
+
+		sess_key := conn.LocalAddr().String()+":"+conn.RemoteAddr().String() // +string(getNextSessionIdCounter())
 		curSession := SshSessions[sess_key]
+		curSession.user = user
 		curSession.client_password = string(password)
 		curSession.client_username = conn.User()
 		curSession.proxy = proxy
@@ -56,6 +89,8 @@ func (proxy proxyContext) startProxy() {
 		curSession.start_time = time.Now()
 		curSession.msg_signal = make([]chan int,0)
 		curSession.filename = sess_key + ".log.json"
+		curSession.sessionID = sess_key
+		
 		curSession.mutex.Unlock()
 		return nil, nil
 	},
@@ -77,6 +112,12 @@ func (proxy proxyContext) startProxy() {
 		}
 
 		sess_key := conn.LocalAddr().String()+":"+conn.RemoteAddr().String()
+		// if a client reuses socket ports, let's preserve the old session
+		// they shouldn't be able to do this concurrently because of how TCP works.
+		if  val, ok := SshSessions[sess_key]; ok {
+			SshSessions[sess_key+"_old"] = val
+			delete(SshSessions, sess_key)
+		}
 		SshSessions[sess_key] = new(sessionContext)
 		SshSessions[sess_key].client_host = conn.RemoteAddr().String()
 		SshSessions[sess_key].mutex.Lock()
@@ -88,11 +129,28 @@ func (proxy proxyContext) startProxy() {
 		}
 		//go ssh.DiscardRequests(reqs)
 		// maybe we *can* discard requests?
-		go proxy.handleClientConn(ssh_conn, channels ,reqs)
+		go proxy.handleClientConn(ssh_conn, channels, reqs, SshSessions[sess_key])
 	}
 }
 
-func (proxy proxyContext) addSessionToSessionList(session * sessionContext) {
+func (proxy *proxyContext) addSessionToUserList(session *sessionContext) {
+	user := session.user.getKey()
+	if  _, ok := proxy.sessions[user]; !ok {
+		proxy.sessions[user] = make(map[string]*sessionContext)
+	}
+	session_id := session.getID()
+	proxy.sessions[user][session_id] = session
+}
+
+func (proxy *proxyContext) activate() {
+	proxy.active = true
+}
+
+func (proxy *proxyContext) deactivate() {
+	proxy.active = false
+}
+
+func (proxy *proxyContext) addSessionToSessionList(session * sessionContext) {
 	filename := SESSION_LIST_FN
 	fd, err := os.OpenFile(*proxy.session_folder + "/" + filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
@@ -108,11 +166,83 @@ func (proxy proxyContext) addSessionToSessionList(session * sessionContext) {
 }
 
 
-func (proxy proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_channels <-chan ssh.NewChannel, client_requests <-chan *ssh.Request) {
+
+func (proxy *proxyContext) getProxyUser(username, password string) (error, *proxyUser,bool) {
+	err := errors.New("not a valid user")
+	key := buildProxyUserKey(username,password)
+	if  val, ok := proxy.Users[key]; ok {
+		return_val := *val
+		return nil, &return_val, false
+	} else if  val, ok := proxy.Users[buildProxyUserKey(username,"")]; ok {
+		if val.Password == "" {
+			return_val := *val
+			return nil, &return_val, true
+		} else {
+			return err, nil, false
+		}
+	} else {
+		return err, nil, false
+	}
+}
+
+func (proxy *proxyContext) addProxyUser(user *proxyUser) {
+	key := buildProxyUserKey(user.Username,user.Password)
+	proxy.Users[key] = user
+}
+
+func (proxy *proxyContext) removeProxyUser(username string, password string) {
+	key := buildProxyUserKey(username,password)
+	if _, ok := proxy.Users[key]; ok {
+		delete(proxy.Users, key)
+	}
+	
+}
+
+func (proxy *proxyContext) authenticateUser(username,password string) (error, *proxyUser) {
+	
+	default_user := &proxyUser{
+		Username: username,
+		Password: password,
+		RemoteHost: proxy.getDefaultRemoteHost(),
+		RemoteUsername: username,
+		RemotePassword: password,
+	}
+
+	// override password if it is provided
+	if proxy.override_password != "" {
+		default_user.RemotePassword = proxy.override_password
+	}
+	// override user if it is provided
+	if proxy.override_user != "" {
+		default_user.RemoteUsername = proxy.override_user
+	}
+
+	if(len(proxy.Users)>0) {
+		err, user,password_blank := proxy.getProxyUser(username, password)
+		if (err != nil) {
+			//creds are not valid 
+			return err, nil
+		} else {
+			if password_blank {
+				proxy.log.Printf("allowing any password for user: %v\n", username)
+			} 
+			return nil, user
+		}
+	} else {
+		return nil, default_user
+	}
+}
+
+func (proxy *proxyContext) getDefaultRemoteHost() string {
+	return *proxy.server_ssh_ip +":"+strconv.Itoa(*proxy.server_ssh_port)
+}
+
+func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_channels <-chan ssh.NewChannel, client_requests <-chan *ssh.Request, curSession *sessionContext) {
 
 
-	sess_key := client_conn.LocalAddr().String()+":"+client_conn.RemoteAddr().String()
-	curSession := SshSessions[sess_key]
+	//sess_key := client_conn.LocalAddr().String()+":"+client_conn.RemoteAddr().String()
+	//curSession := SshSessions[sess_key]
+	//sess_key := curSession.sessionID
 	curSession.markThreadStarted()
 	curSession.initializeLog()
 	defer curSession.markThreadStopped()
@@ -120,38 +250,26 @@ func (proxy proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_c
 	
 	// connect to client.
 
-	remote_server_host := *proxy.server_ssh_ip +":"+strconv.Itoa(*proxy.server_ssh_port)
-
-	client_password := curSession.client_password
-	if proxy.override_password != "" {
-		client_password = proxy.override_password
-	}
-
-	client_user     := client_conn.User()
-
-	if proxy.override_user != "" {
-		client_user = proxy.override_user
-	}
 	remote_server_conf := &ssh.ClientConfig{
-		User:            client_user,
+		User:            curSession.user.RemoteUsername,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		Auth: []ssh.AuthMethod{
-			ssh.Password(client_password),
+			ssh.Password(curSession.user.RemotePassword),
 		},
 
 	}
-	remote_sock, err := net.DialTimeout("tcp", remote_server_host, 5000000000)
+	remote_sock, err := net.DialTimeout("tcp", curSession.user.RemoteHost, 5000000000)
 	if err != nil {
-		proxy.log.Printf("Error: cannot connect to remote server %s\n",remote_server_host)
+		proxy.log.Printf("Error: cannot connect to remote server %s\n",curSession.user.RemoteHost)
 		return
 	}
 
 	defer remote_sock.Close()
 
-	remote_conn, remote_channels, remote_requests, err := ssh.NewClientConn(remote_sock, remote_server_host, remote_server_conf)
+	remote_conn, remote_channels, remote_requests, err := ssh.NewClientConn(remote_sock, curSession.user.RemoteHost, remote_server_conf)
 
 	if err != nil {
-		proxy.log.Printf("Error creating new ssh client conn %w\n", err)
+		proxy.log.Printf("Error creating new ssh client conn %v\n", err)
 		return 
 	}
 
@@ -164,17 +282,28 @@ func (proxy proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_c
 		shutdown_err <- remote_conn.Wait()
 	}()
 
-	curSession.handleEvent(
-		&sessionEvent{
-			Type: EVENT_SESSION_START,
-			Key: sess_key,
-			ServHost: remote_server_host,
-			ClientHost: client_conn.RemoteAddr().String(),
-			Username: curSession.client_username ,
-			Password: curSession.client_password,
-			StartTime: curSession.getStartTimeAsUnix(),
-			TimeOffset: 0,
-		})
+	proxy.addSessionToUserList(curSession)
+
+	start_event := sessionEvent{
+		Type: EVENT_SESSION_START,
+		Key: curSession.sessionID,
+		ServHost: curSession.user.RemoteHost,
+		ClientHost: client_conn.RemoteAddr().String(),
+		Username: curSession.client_username ,
+		Password: curSession.client_password,
+		StartTime: curSession.getStartTimeAsUnix(),
+		TimeOffset: 0,
+	}
+	curSession.handleEvent(&start_event)
+
+	proxy.log.Printf("New session starting: %v\n",start_event.toJSON())
+	for {
+		if (proxy.active) {
+			break;
+		}
+		time.Sleep(ACTIVE_POLLING_DELAY)
+	}
+	
 
 	//curSession.log_session_data()
 	go curSession.handleChannels(remote_conn, client_channels)
@@ -182,7 +311,92 @@ func (proxy proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_c
 	go curSession.handleRequests(client_conn, remote_requests)
 	go curSession.handleRequests(remote_conn, client_requests)
 	
+	proxy.log.Println("New session started")
 
 	<-shutdown_err
 	remote_conn.Close()
 }
+
+func (proxy *proxyContext) getSessionsKeys() []string {
+	session_keys := make([]string, 0)
+	for key := range proxy.sessions {
+		session_keys = append(session_keys,key)
+	}
+	return session_keys
+}
+
+func (proxy *proxyContext) makeSessionViewerForUser(user_key string) *proxySessionViewer {
+
+	_,user,_ := proxy.getProxyUser(user_key, "")
+
+	if user != nil {
+		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST)
+		viewer.proxy = proxy
+		viewer.user = user
+		return viewer
+	} else {
+		return nil
+	}
+}
+
+
+func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session string) *proxySessionViewer {
+	_,user,_ := proxy.getProxyUser(user_key, "")
+
+	if user != nil {
+		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST)
+		viewer.proxy = proxy
+		viewer.user = user
+		viewer.sessionKey = session
+		proxy.addSessionViewer(viewer)
+		return viewer
+	} else {
+		return nil
+	}
+}
+
+
+func (proxy *proxyContext) addSessionViewer(viewer *proxySessionViewer) {
+	key := viewer.secret
+	proxy.viewers[key] = viewer
+}
+
+func (proxy *proxyContext) removeSessionViewer(key string) {
+	if _, ok := proxy.viewers[key]; ok {
+		delete(proxy.viewers, key)
+	}
+}
+
+
+func (proxy *proxyContext) getSessionViewer(key string) *proxySessionViewer {
+	if  val, ok := proxy.viewers[key]; ok {
+		if val.isExpired() {
+			proxy.removeSessionViewer(key)
+		} else {
+			return val
+		}
+	}
+	return nil
+}
+
+
+
+// note: username/password combo is a 
+// unique key here
+type proxyUser struct {
+	Username	string
+	Password	string
+	RemoteHost	string
+	RemoteUsername string
+	RemotePassword string
+}
+
+func buildProxyUserKey(user,pass string) string {
+	return user + ":" + pass
+}
+
+func (user *proxyUser) getKey() string {
+	return buildProxyUserKey(user.Username, "")
+}
+
+

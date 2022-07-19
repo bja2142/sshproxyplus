@@ -14,9 +14,14 @@ import (
 	"encoding/json"
 )
 
+const SIGNAL_SESSION_END int = 0
+const SIGNAL_NEW_MESSAGE int = 1
+
+//var sessionIDCounter uint64 = 0
+
 // session context
 type sessionContext struct {
-	proxy				proxyContext
+	proxy				*proxyContext
 	mutex				sync.Mutex
 	log_mutex			sync.Mutex
 	event_mutex			sync.Mutex
@@ -38,6 +43,8 @@ type sessionContext struct {
 	term_cols			uint32
 	filename			string
 	events				[]*sessionEvent
+	user				*proxyUser
+	sessionID			string
 }
 // TODO: create a routine to remove a signal
 // so the signal list doesn't get crowded.
@@ -58,6 +65,17 @@ func (session * sessionContext) handleChannels(dest_conn ssh.Conn, channels <-ch
 		}()
 	}
 }
+
+func (session * sessionContext) getID() string {
+	return session.sessionID
+}
+
+/*
+func getNextSessionIdCounter() uint64 {
+	result := sessionIDCounter
+	sessionIDCounter+=1
+	return result
+}*/
 
 
 func (session * sessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel ssh.NewChannel) {
@@ -90,7 +108,7 @@ func (session * sessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel s
 
 	incoming_channel, incoming_requests, err := cur_channel.Accept()
 	if err != nil {
-		session.proxy.log.Printf("error accept new channel: %w\n", err)
+		session.proxy.log.Printf("error accept new channel: %v\n", err)
 		return
 	}
 	defer incoming_channel.Close()

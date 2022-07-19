@@ -4,7 +4,7 @@ package main
 // inspiration from: https://github.com/dutchcoders/sshproxy
 
 // ugh i hate camel case but i guess i need to get over it 
-// some day, at least. 
+// some day, at least. (edit: slowly phasing it out...)
 
 // thanks to these tutorials and references:
 // - https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
@@ -35,19 +35,14 @@ var (
 	SshSessions map[string]*sessionContext 
 )
 
-const SIGNAL_SESSION_END int = 0
-const SIGNAL_NEW_MESSAGE int = 1
-const SESSION_LIST_FN	string = ".session_list"
-//const SIGNAL_RESIZE_WINDOW int = 2
-
-
-
 
 
 
 func main() {
 
 	cur_proxy := parseArgsForNewProxyContext()
+
+	cur_proxy.addProxyUser(&proxyUser{"bobbytables","","127.0.0.1:22","ben","password"})
 
 	SshSessions = map[string]*sessionContext{}
 
@@ -60,20 +55,23 @@ func main() {
 		fmt.Scanln(&input)
 		if input == "q" {
 			break;
+		} else if input == "a" {
+			cur_proxy.activate()
+			Logger.Println("activating")
+		}  else if input == "d" {
+			cur_proxy.deactivate()
+			Logger.Println("deactivating")
+			
 		}
 		fmt.Println("Enter q to quit.")
+		log.Printf("Proxy Active:%v\n",cur_proxy.active)
 	}
 
 }
 
 
-
 // TODO: add methods to sessionContext so I can dump session data to file (json) or to stdout``
 // TODO: add list of handlers to session to be called whenever new data is added to a session
-//			--> implied: for each session there is a thread that monitors some queue of new
-//			messages and forwards them to any active observers 
-// TODO: (after the above) add ability to query active sessions and get data for a session using
-// 		a web socket
 
 
 
@@ -85,7 +83,8 @@ func main() {
 
 
 
-// TODO switch fmt to context
+
+// TODO switch fmt to session
 
 
 
@@ -104,22 +103,23 @@ func initLogging(filename *string) {
 	Logger = log.New(file, "LOG: ", log.Ldate|log.Ltime|log.Lshortfile)
 }
 
-func parseArgsForNewProxyContext() proxyContext {
+func parseArgsForNewProxyContext() *proxyContext {
 
-	server_ssh_port := flag.Int("dport",22, "destination ssh server port")
-	server_ssh_ip := flag.String("dip","127.0.0.1", "destination ssh server ip")
+	server_ssh_port := flag.Int("dport",22, "destination ssh server port; this field is only used if the the (Users proxyUser) field is empty")
+	server_ssh_ip := flag.String("dip","127.0.0.1", "destination ssh server ip; this field is only used if the the (Users proxyUser) field is empty")
 	proxy_listen_port := flag.Int("lport", 2222, "proxy listen port")
 	proxy_listen_ip   := flag.String("lip", "0.0.0.0", "ip for proxy to bind to")
 	proxy_key   := flag.String("lkey", "autogen", "private key for proxy to use; defaults to autogen new key")
 	log_file := flag.String("log", "-", "file to log to; defaults to stdout")
-	session_folder := flag.String("sess-dir", ".", "directory to write sessions to; defaults to the current directory")
+	session_folder := flag.String("sess-dir", ".", "directory to write sessions to and to read from; defaults to the current directory")
 	tls_cert := flag.String("tls_cert", ".", "TLS certificate to use for web; defaults to plaintext")
 	tls_key := flag.String("tls_key", ".", "TLS key to use for web; defaults to plaintext")
-	override_user := flag.String("override-user", "", "Override client-supplied username when proxying to remote server")
-	override_password := flag.String("override-pass","","Overrides client-supplied password when proxying to remote server")
+	override_user := flag.String("override-user", "", "Override client-supplied username when proxying to remote server; this field is only used if the the (Users proxyUser) field is empty")
+	override_password := flag.String("override-pass","","Overrides client-supplied password when proxying to remote server; this field is only used if the the (Users proxyUser) field is empty")
+	require_valid_password := flag.Bool("require-valid-password",false, "requires a valid password to authenticate; if this field is false then the presented credentials will be passed to the port and server provided in dport and dip; this field is ignored if (Users proxy) field is not empty")
 	web_listen_port := flag.Int("web-port", 8080, "web server listen port; defaults to 8080")
 	server_version := flag.String("server-version", "SSH-2.0-OpenSSH_7.9p1 Raspbian-10", "server version to use")
-
+	//TODO: add ability to load and save from json config file
 	flag.Parse()
 
 	initLogging(log_file)
@@ -173,20 +173,24 @@ func parseArgsForNewProxyContext() proxyContext {
 		tls_cert = &dot
 	}
 
-	return proxyContext{
-		server_ssh_port,
-		server_ssh_ip,
-		proxy_listen_ip,
-		proxy_listen_port,
-		proxy_private_key,
-		Logger,
-		session_folder,
-		tls_cert,
-		tls_key,
-		*override_password,
-		*override_user,
-		web_listen_port,
-		server_version}
+	return &proxyContext{
+		server_ssh_port: server_ssh_port,
+		server_ssh_ip: server_ssh_ip,
+		listen_ip: proxy_listen_ip,
+		listen_port: proxy_listen_port,
+		private_key: proxy_private_key,
+		log: Logger,
+		session_folder: session_folder,
+		tls_cert: tls_cert,
+		tls_key: tls_key,
+		override_password: *override_password,
+		override_user: *override_user,
+		web_listen_port: web_listen_port,
+		server_version: server_version,
+		RequireValidPassword: *require_valid_password,
+		Users: map[string]*proxyUser{},
+		sessions: map[string]map[string]*sessionContext{},
+		viewers: map[string]*proxySessionViewer{}}
 }
 
 
