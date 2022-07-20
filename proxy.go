@@ -407,7 +407,7 @@ func (proxy *proxyContext) getSessionViewer(key string) *proxySessionViewer {
 
 func makeListOfSessionKeys(sessions map[string]*sessionContext, include_inactive bool) []string {
 	session_keys := make([]string, 0)
-
+	
 	for cur_key := range sessions {
 		if sessions[cur_key].active == true || include_inactive {
 			session_keys = append(session_keys, cur_key)
