@@ -24,6 +24,10 @@ jQuery(document).ready(function() {
     
     global_fit_addon = fitAddon;*/
     //setInterval(fetch_old_session_list,10*1000);
-    read_hashes()
+    
+    jQuery( window ).on( 'hashchange', function( e ) {
+        read_hashes();
+    } );
+    read_hashes();
 });
 
