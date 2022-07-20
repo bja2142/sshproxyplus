@@ -25,6 +25,10 @@ type proxySessionViewer struct {
 	expiration int64
 }
 
+func (viewer *proxySessionViewer) buildSignedURL() string {
+	return fmt.Sprintf("%v/#signed-viewer&%v",viewer.proxy.baseURI,viewer.secret)
+}
+
 func createNewSessionViewer(viewer_type int) *proxySessionViewer {
 	viewer := &proxySessionViewer{}
 	var err error

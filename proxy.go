@@ -38,8 +38,9 @@ type proxyContext struct {
 	allSessions			map[string]*sessionContext 
 	RequireValidPassword	bool
 	active				bool
-	public_access		bool
+	publicAccess		bool
 	viewers				map[string]*proxySessionViewer
+	baseURI				string
 	// when there are new sessions, block forwarding until this is true
 }
 

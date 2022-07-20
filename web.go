@@ -231,6 +231,7 @@ func (server *proxyWebServer) getActiveSession(conn *websocket.Conn) {
 	return 
 }
 
+
 func (server *proxyWebServer) socketHandler(w http.ResponseWriter, r *http.Request) {
 	
     // Upgrade our raw HTTP connection to a websocket based one
@@ -253,6 +254,17 @@ func (server *proxyWebServer) socketHandler(w http.ResponseWriter, r *http.Reque
 		switch string(message) {
 			case "list-active":
 				sessions_json, err := json.Marshal(server.getAllSessionInfo(true))
+				if err != nil {
+					log.Println("Error during marshaling json: ", err)
+					break
+				}
+				err = conn.WriteMessage(websocket.TextMessage,sessions_json)
+				if err != nil {
+					log.Println("Error during message writing:", err)
+					break
+				}
+			case "list-all":
+				sessions_json, err := json.Marshal(server.getAllSessionInfo(false))
 				if err != nil {
 					log.Println("Error during marshaling json: ", err)
 					break
@@ -311,7 +323,7 @@ func (server *proxyWebServer) ServeWebSocketSessionServer() {
     //http.HandleFunc("/", home)
 
 	Logger.Printf("starting web socket server on %v\n",host)
-	if tls_cert != "." || tls_key != "." {
+	if tls_cert != "." && tls_key != "." {
 		http.ListenAndServeTLS(host, tls_cert, tls_key,nil)
 	} else {
 		http.ListenAndServe(host, nil)
@@ -322,4 +334,5 @@ func (server *proxyWebServer) ServeWebSocketSessionServer() {
 type proxyWebServer struct {
 	proxy	*proxyContext
 	listenHost	string
+	baseURI		string
 }

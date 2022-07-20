@@ -26,6 +26,7 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"net"
 
 )
 
@@ -83,7 +84,7 @@ func getKeysForAllUsers(proxy * proxyContext) {
 		proxy.log.Println(key)
 		err, viewer := proxy.makeSessionViewerForUser(key)
 		if (err == nil) {
-			proxy.log.Printf("%v:%v\n", key,viewer.secret)
+			proxy.log.Printf("%v:%v\n", key,viewer.buildSignedURL())
 		}
 	}
 }
@@ -138,6 +139,8 @@ func parseArgsForNewProxyContext() *proxyContext {
 	require_valid_password := flag.Bool("require-valid-password",false, "requires a valid password to authenticate; if this field is false then the presented credentials will be passed to the port and server provided in dport and dip; this field is ignored if (Users proxy) field is not empty")
 	web_listen_port := flag.Int("web-port", 8080, "web server listen port; defaults to 8080")
 	server_version := flag.String("server-version", "SSH-2.0-OpenSSH_7.9p1 Raspbian-10", "server version to use")
+	base_URI_option	:= flag.String("base-uri","auto","override base URI when crafting signed URLs; default is to auto-detect")
+	public_access := flag.Bool("public-view", true, "all viewers to query sessions without secret URL")
 	//TODO: add ability to load and save from json config file
 	flag.Parse()
 
@@ -146,6 +149,8 @@ func parseArgsForNewProxyContext() *proxyContext {
 
 	var proxy_private_key ssh.Signer
 	var err error
+
+
 
 	if *proxy_key != "autogen" {
 		var proxy_key_bytes []byte
@@ -192,6 +197,29 @@ func parseArgsForNewProxyContext() *proxyContext {
 		tls_cert = &dot
 	}
 
+	var base_URI string
+	if *base_URI_option == "auto" {
+		var protocol, hostname string
+		var err error
+		if *tls_cert != "." && *tls_key != "." {
+			protocol = "https"
+			hostname, err = os.Hostname()
+			if err != nil {
+				hostname = "localhost"
+			}
+		} else {
+			protocol = "http"
+			hostname, err = GetLocalIP()
+			if err != nil {
+				hostname = "127.0.0.1"
+			}
+		}
+		base_URI = fmt.Sprintf("%v://%v:%v",protocol,hostname,*web_listen_port)
+	} else {
+		base_URI = *base_URI_option
+	}
+
+
 	return &proxyContext{
 		server_ssh_port: server_ssh_port,
 		server_ssh_ip: server_ssh_ip,
@@ -210,7 +238,10 @@ func parseArgsForNewProxyContext() *proxyContext {
 		Users: map[string]*proxyUser{},
 		userSessions: map[string]map[string]*sessionContext{},
 		allSessions: map[string]*sessionContext{},
-		viewers: map[string]*proxySessionViewer{}}
+		viewers: map[string]*proxySessionViewer{},
+		baseURI:base_URI,	
+		publicAccess: *public_access,
+	}
 }
 
 
@@ -238,3 +269,21 @@ func generateSigner() (ssh.Signer, error) {
 	return p, nil
 }
 
+// https://stackoverflow.com/questions/23558425/how-do-i-get-the-local-ip-address-in-go/31551220#31551220
+
+// GetLocalIP returns the first non loopback local IP of the host
+func GetLocalIP() (string,error) {
+    addrs, err := net.InterfaceAddrs()
+    if err != nil {
+        return "", err
+    }
+    for _, address := range addrs {
+        // check the address type and if it is not a loopback the display it
+        if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
+            if ipnet.IP.To4() != nil {
+                return ipnet.IP.String(), nil
+            }
+        }
+    }
+    return "", errors.New("no non-loopback interface found")
+}

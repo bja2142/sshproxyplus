@@ -1,6 +1,36 @@
 //const { Terminal } = require("xterm");
 //const { FitAddon } = require("xterm-addon-fit");
 
+var replace_list = [
+    [/\x1b.\x44/,'[LEFT ARROW]'],
+    [/\x1b.\x43/,'[RIGHT ARROW]'],
+    [/\x1b.\x41/,'[UP ARROW]'],
+    [/\x1b.\x42/,'[DOWN ARROW]'],
+    [/\x1b.\x46/,'[END]'],
+    [/\x1b.\x48/,'[HOME]'],
+    [/\x1b\x5b\x33\x7e/,'[DELETE]'],
+    [/\x1b\x5b\x36\x7e/,'[PAGE DOWN]'],
+    [/\x1b\x5b\x35\x7e/,'[PAGE UP]'],
+    [/\x1b\x5b\x32\x7e/,'[INSERT]'],
+    [/\x1b\x4f\x50/,'[F1]'],
+    [/\x1b\x4f\x51/,'[F2]'],
+    [/\x1b\x4f\x52/,'[F3]'],
+    [/\x1b\x4f\x53/,'[F4]'],
+    [/\x1b\x5b\x31\x35\x7e/,'[F5]'],
+    [/\x1b\x5b\x31\x37\x7e/,'[F6]'],
+    [/\x1b\x5b\x31\x38\x7e/,'[F7]'],
+    [/\x1b\x5b\x31\x39\x7e/,'[F8]'],
+    [/\x1b\x5b\x32\x30\x7e/,'[F9]'],
+    [/\x1b\x5b\x32\x31\x7e/,'[F10]'],
+    [/\x1b\x5b\x32\x33\x7e/,'[F11]'],
+    [/\x1b\x5b\x32\x34\x7e/,'[F12]'],
+    [/\x09/,'[TAB]'],
+    [/\x1b/,'[ESC]'],
+    [/\r/,'[CARRIAGE RETURN]'],
+    [/\n/,'[LINE FEED]'],
+    [/\x7f/,'[BACKSPACE]'],
+]
+
 class TerminalEvent {
     blob
 
@@ -123,8 +153,8 @@ class TerminalReader {
             slide: function( event, ui ) {
                 if(self.event_index != ui.value)
                 {
-                    console.log(self.event_index, ui.value)
-                    console.log("moving_to_event")
+                    //console.log(self.event_index, ui.value)
+                    //console.log("moving_to_event")
                     self.move_to_event(ui.value);
                 }
                 
@@ -186,7 +216,9 @@ class TerminalReader {
         this.controlbar_status.append(
                 jQuery('<input type="textbox" class="speed_box">')
                 .attr("value",this.speed)
-                .change(function(event){console.log(event.target.value);self.update_speed(event.target.value)})
+                .change(function(event){
+                    //console.log(event.target.value);
+                    self.update_speed(event.target.value)})
             )
         this.controlbar_status.append(
                 jQuery('<span></span>')
@@ -317,7 +349,7 @@ class TerminalReader {
         this.terminal_element.css("width", new_width)
         this.terminal_element.css("height", new_height)
         this.#fit_addon.fit()
-        //console.log("new dimensions",new_height,new_width)
+        ////console.log("new dimensions",new_height,new_width)
     }
 
     resize(rows,cols)
@@ -370,15 +402,15 @@ class TerminalReader {
 
     start_timer_for_next_event(in_delay=-1)
     {
-        //console.log("start timer")
-        if(in_delay == -1) {       
+        ////console.log("start timer")
+        if(in_delay < 0) {       
             if (this.events.length > this.#event_index+1)
             {
-                //console.log("doit")
+                ////console.log("doit")
                 var next_event_index = this.#event_index+1
                 var next_event = this.#events[next_event_index]
-                //console.log(next_event) 
-                //console.log(this.#cur_event)
+                ////console.log(next_event) 
+                ////console.log(this.#cur_event)
                 var delay = next_event.time_offset - this.#cur_event.time_offset
                 delay = delay / this.speed
                 delay = parseInt(delay.toFixed())
@@ -409,7 +441,7 @@ class TerminalReader {
     {
         var signal_chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         var data = in_data
-        //console.log(convertToHex(data))
+        ////console.log(convertToHex(data))
         for(var index=0; index<replace_list.length; index++)
         {
             data = data.replace(replace_list[index][0],replace_list[index][1])
@@ -536,7 +568,7 @@ class TerminalReader {
     }
     write_buffers(callback=undefined,always_callback=true)
     {
-        //console.log(this.keystroke_buffer,this.terminal_buffer,always_callback)
+        ////console.log(this.keystroke_buffer,this.terminal_buffer,always_callback)
         if(callback == undefined)
         {
             callback = function() {}
@@ -588,7 +620,7 @@ class TerminalReader {
         {
             callback = function() {}
         }
-        //console.log("paused:",this.paused)
+        ////console.log("paused:",this.paused)
         if(this.paused && ! this.is_live)
         {
             return
@@ -609,7 +641,7 @@ class TerminalReader {
         if (this.#events.length > this.#event_index)
         {
             this.#cur_event = this.#events[this.#event_index]
-            //console.log(this.#cur_event)
+            ////console.log(this.#cur_event)
             this.action_event(this.#cur_event)
             if(!this.paused)
             {
@@ -623,7 +655,7 @@ class TerminalReader {
         } else {
             if(this.is_live == false)
             {
-                //console.log("pausing")
+                ////console.log("pausing")
                 this.pause()
             } else {
                 callback()
@@ -775,7 +807,7 @@ class TerminalReader {
         
         this.#keystrokes.empty()
         var new_index = event_id 
-        //console.log
+        ////console.log
         for (; event_index <= new_index; event_index++)
         {
             var cur_event = this.events[event_index]
@@ -814,7 +846,7 @@ class TerminalReader {
 
     toggle_play_pause(obj)
     {
-        console.log(obj)
+        //console.log(obj)
         var button = jQuery(obj)
         if(button.hasClass("play"))
         {
