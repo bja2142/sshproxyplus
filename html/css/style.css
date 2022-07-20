@@ -115,11 +115,12 @@ a.selected:visited
 
 .terminal_reader .controlbar
 {
-    height:28px;
+    height:25px;
     width:100%;
     display:flex;
     margin:0px;
-    padding:0px;
+    padding-top:0px;
+    margin-top:5px;
 }
 
 .terminal_reader .controlbar .rightdiv

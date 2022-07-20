@@ -32,9 +32,10 @@ import (
 var (
 	Logger *log.Logger
 	// keys are "listen_ip:listen_port:client_ip:client:port"
-	SshSessions map[string]*sessionContext 
+	//SshSessions map[string]*sessionContext 
 )
 
+//TODO: deprecate SshSessions
 
 
 
@@ -44,11 +45,15 @@ func main() {
 
 	cur_proxy.addProxyUser(&proxyUser{"bobbytables","","127.0.0.1:22","ben","password"})
 
-	SshSessions = map[string]*sessionContext{}
 
 	go cur_proxy.startProxy()
 
-	go ServeWebSocketSessionServer("0.0.0.0:"+strconv.Itoa(*cur_proxy.web_listen_port),*cur_proxy.tls_cert, *cur_proxy.tls_key)
+	webServer := &proxyWebServer{
+		proxy: cur_proxy, 
+		listenHost: "0.0.0.0:"+strconv.Itoa(*cur_proxy.web_listen_port),
+	}
+
+	go webServer.ServeWebSocketSessionServer()
 
 	var input string
 	for {
@@ -62,11 +67,25 @@ func main() {
 			cur_proxy.deactivate()
 			Logger.Println("deactivating")
 			
+		} else if input == "k" {
+			getKeysForAllUsers(cur_proxy)
 		}
 		fmt.Println("Enter q to quit.")
 		log.Printf("Proxy Active:%v\n",cur_proxy.active)
 	}
 
+}
+
+func getKeysForAllUsers(proxy * proxyContext) {
+	users := proxy.getUsers()
+	proxy.log.Printf("%v\n",users)
+	for _,key := range users {
+		proxy.log.Println(key)
+		err, viewer := proxy.makeSessionViewerForUser(key)
+		if (err == nil) {
+			proxy.log.Printf("%v:%v\n", key,viewer.secret)
+		}
+	}
 }
 
 
@@ -189,7 +208,8 @@ func parseArgsForNewProxyContext() *proxyContext {
 		server_version: server_version,
 		RequireValidPassword: *require_valid_password,
 		Users: map[string]*proxyUser{},
-		sessions: map[string]map[string]*sessionContext{},
+		userSessions: map[string]map[string]*sessionContext{},
+		allSessions: map[string]*sessionContext{},
 		viewers: map[string]*proxySessionViewer{}}
 }
 
@@ -216,32 +236,5 @@ func generateSigner() (ssh.Signer, error) {
 		return nil, err
 	}
 	return p, nil
-}
-
-
-
-func ListSessions() []string {
-	session_keys := make([]string, len(SshSessions))
-
-	index := 0
-	for cur_key := range SshSessions {
-		session_keys[index] = cur_key
-		index++
-	}
-
-	return session_keys
-}
-
-
-func ListActiveSessions() []string {
-	session_keys := make([]string, 0)
-
-	for cur_key := range SshSessions {
-		if SshSessions[cur_key].active == true {
-			session_keys = append(session_keys, cur_key)
-		}
-	}
-
-	return session_keys
 }
 

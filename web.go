@@ -29,33 +29,56 @@ type session_info struct {
     Active bool `json:"active"`
 	Start_time	int64 `json:"start"`
 	Length		int64 `json:"length"`
+	User		string `json:"user,omitempty"`
+	Secret		string `json:"secret,omitempty"`
 }
 
-
-func getSessionInfo(active_only bool) []session_info {
-	var sessions_keys []string
-	if active_only {
-		sessions_keys = ListActiveSessions()
-	} else {
-		sessions_keys = ListSessions()
-	}
+func buildWebSessionInfoList(sessions map[string]*sessionContext, sessions_keys []string, user string, secret string) []session_info {
 	session_list := make([]session_info, len(sessions_keys))
-	
-	index := 0
-	for index < len(sessions_keys) {
-		
+	log.Printf("%v,%v,%v\n",len(sessions_keys),sessions_keys,sessions)
+	for index := 0; index < len(sessions_keys); index ++ {
+
 		session_key := sessions_keys[index]
+		if session_key == "" {
+			continue
+		}
+		cur_session := sessions[session_key]
+				
 		session_list[index].Key = session_key
-		session_list[index].Active = SshSessions[session_key].active
-		session_list[index].Start_time = SshSessions[session_key].getStartTimeAsUnix()
-		stop_time := SshSessions[session_key].stop_time
-		if SshSessions[session_key].active {
+		session_list[index].User = user
+		session_list[index].Secret = secret
+		session_list[index].Active = cur_session.active
+		session_list[index].Start_time = cur_session.getStartTimeAsUnix()
+		
+		stop_time := cur_session.stop_time
+		if cur_session.active {
 			stop_time = time.Now()
 		}
-		session_list[index].Length = int64(stop_time.Sub(SshSessions[session_key].start_time).Seconds())
-		index++
+		session_list[index].Length = int64(stop_time.Sub(cur_session.start_time).Seconds())
 	}
 	return session_list
+
+}
+func (server *proxyWebServer) getUserSessionInfo(viewer *proxySessionViewer) []session_info {
+	sessions, sessions_keys := viewer.getSessions()
+
+	return buildWebSessionInfoList(sessions, sessions_keys, viewer.user.getKey(), viewer.secret)
+}
+
+func (server *proxyWebServer) getAllSessionInfo(active_only bool) []session_info {
+	var sessions_keys []string
+
+	if active_only {
+		sessions_keys = server.proxy.ListAllActiveSessions()
+	} else {
+		sessions_keys = server.proxy.ListAllSessions()
+	}
+	sessions := server.proxy.allSessions
+
+	
+	return buildWebSessionInfoList(sessions, sessions_keys,"","")
+	
+	
 }
 
 func send_window_update(rows uint32, columns uint32,  conn * websocket.Conn){
@@ -111,53 +134,104 @@ func send_latest_events(prev_index int, new_index int, conn * websocket.Conn, ev
 	}
 }
 
-func getActiveSession(conn *websocket.Conn) bool {
+func (server *proxyWebServer) sessionViewerSocketGet(conn * websocket.Conn) {
+	_, viewerKey, err := conn.ReadMessage()
+	if err != nil {
+		log.Println("Error during message reading:", err)
+		return
+	}
+	viewer := server.proxy.getSessionViewer(string(viewerKey))
+	if viewer == nil {
+		log.Printf("couldn't find viewer with key:%v\n", "|"+string(viewerKey)+"|")
+		return
+	}
+	_, sessionKey, err := conn.ReadMessage()
+	if err != nil {
+		log.Println("Error during message reading:", err)
+		return
+	}
+	viewer_sessions, _ := viewer.getSessions()
+
+	if session, ok := viewer_sessions[string(sessionKey)]; ok {
+		playSession(conn,session)
+	} else {
+		log.Printf("could not find session %v\n",sessionKey)
+		conn.WriteMessage(websocket.TextMessage,[]byte("could not find session"))
+		return 
+	}
+	
+}
+
+func (server *proxyWebServer) sessionViewerSocketList(conn * websocket.Conn) {
+	_, viewerKey, err := conn.ReadMessage()
+	if err != nil {
+		log.Println("Error during message reading:", err)
+		return
+	}
+	viewer := server.proxy.getSessionViewer(string(viewerKey))
+	if viewer == nil {
+		log.Printf("couldn't find viewer with key:%v\n", "|"+string(viewerKey)+"|")
+		return
+	}
+	sessions_json, err := json.Marshal(server.getUserSessionInfo(viewer))
+	if err != nil {
+		log.Println("Error during marshaling json: ", err)
+		return
+	}
+	err = conn.WriteMessage(websocket.TextMessage,sessions_json)	
+}
+
+func playSession(conn *websocket.Conn, session *sessionContext) {
+	last_event_index := 0
+	new_event_index := len(session.events)
+	fmt.Println("found session")
+	client_signal :=  session.makeNewSignal()
+	defer session.removeSignal(client_signal)
+	fmt.Println("have signal")
+	//send_window_update(session.term_rows,session.term_cols, conn)
+	send_latest_events(last_event_index, 
+			new_event_index, conn, session.events)
+		
+	last_event_index = new_event_index				
+	for true {
+		switch <-client_signal {
+			case SIGNAL_SESSION_END:
+				fmt.Println("session ended")
+				return
+			case SIGNAL_NEW_MESSAGE: 
+				fmt.Println("new message signal")
+				new_event_index := len(session.events)
+				send_latest_events(last_event_index, 
+					new_event_index, conn, session.events)
+				
+				last_event_index = new_event_index	
+			
+		}
+	}
+	fmt.Println("no more messages")
+}
+
+func (server *proxyWebServer) getActiveSession(conn *websocket.Conn) {
 	_, session_keyname, err := conn.ReadMessage()
 	if err != nil {
 		log.Println("Error during message reading:", err)
-		return true
+		return 
 	}
 	session := string(session_keyname)
 	fmt.Printf("selecting %v\n",session)
 	
-	if context, ok := SshSessions[session]; ok {
-		
-		last_event_index := 0
-		new_event_index := len(context.events)
-		fmt.Println("found session")
-		client_signal :=  context.makeNewSignal()
-		fmt.Println("have signal")
-		//send_window_update(context.term_rows,context.term_cols, conn)
-		send_latest_events(last_event_index, 
-				new_event_index, conn, context.events)
-			
-		last_event_index = new_event_index				
-		for true {
-			switch <-client_signal {
-				case SIGNAL_SESSION_END:
-					fmt.Println("session ended")
-					return true
-				case SIGNAL_NEW_MESSAGE: 
-					fmt.Println("new message signal")
-					new_event_index := len(context.events)
-					send_latest_events(last_event_index, 
-						new_event_index, conn, context.events)
-					
-					last_event_index = new_event_index	
-				
-			}
-		}
-		fmt.Println("no more messages")
+	if context, ok := server.proxy.allSessions[session]; ok {
+		playSession(conn,context)
 	} else {
 		log.Printf("could not find session %v\n",session)
 		conn.WriteMessage(websocket.TextMessage,[]byte("could not find session"))
-		return true
+		return 
 	}
 
-	return false
+	return 
 }
 
-func socketHandler(w http.ResponseWriter, r *http.Request) {
+func (server *proxyWebServer) socketHandler(w http.ResponseWriter, r *http.Request) {
 	
     // Upgrade our raw HTTP connection to a websocket based one
     conn, err := upgrader.Upgrade(w, r, nil)
@@ -178,7 +252,7 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
         }
 		switch string(message) {
 			case "list-active":
-				sessions_json, err := json.Marshal(getSessionInfo(true))
+				sessions_json, err := json.Marshal(server.getAllSessionInfo(true))
 				if err != nil {
 					log.Println("Error during marshaling json: ", err)
 					break
@@ -188,12 +262,15 @@ func socketHandler(w http.ResponseWriter, r *http.Request) {
 					log.Println("Error during message writing:", err)
 					break
 				}
+			case "viewer-get":
+				server.sessionViewerSocketGet(conn)
+				break;
+			case "viewer-list":
+				server.sessionViewerSocketList(conn)
+				break;
 			case "get":
-				if getActiveSession(conn) {
-					log.Println("breaking from loop")
-					break
-				}
-				
+				server.getActiveSession(conn) 
+				break;
 			default:
 				err = conn.WriteMessage(websocket.BinaryMessage,[]byte("unsupported message type"))
 				if err != nil {
@@ -222,11 +299,15 @@ var upgrader = websocket.Upgrader{
 
 // TODO: make the session folder and the html server folders consistent
 // with the proxy parameters 
-func ServeWebSocketSessionServer(host string, tls_cert string, tls_key string) {
+func (server *proxyWebServer) ServeWebSocketSessionServer() {
 
+	host := server.listenHost
+	tls_cert := *server.proxy.tls_cert
+	tls_key := *server.proxy.tls_key
+	
 	fs := http.FileServer(http.Dir("./html"))
 	http.Handle("/", fs)
-	http.HandleFunc("/socket", socketHandler)
+	http.HandleFunc("/socket", server.socketHandler)
     //http.HandleFunc("/", home)
 
 	Logger.Printf("starting web socket server on %v\n",host)
@@ -236,4 +317,9 @@ func ServeWebSocketSessionServer(host string, tls_cert string, tls_key string) {
 		http.ListenAndServe(host, nil)
 	}
     
+}
+
+type proxyWebServer struct {
+	proxy	*proxyContext
+	listenHost	string
 }

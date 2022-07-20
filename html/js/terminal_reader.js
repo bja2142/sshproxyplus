@@ -410,16 +410,16 @@ class TerminalReader {
         var signal_chars="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
         var data = in_data
         //console.log(convertToHex(data))
-        for(index=0; index<replace_list.length; index++)
+        for(var index=0; index<replace_list.length; index++)
         {
             data = data.replace(replace_list[index][0],replace_list[index][1])
         }
-        for(index=1; index<signal_chars.length; index++)
+        for(var index=1; index<signal_chars.length; index++)
         {
             data = data.replace(String.fromCharCode(index),"[CTRL+"+signal_chars[index-1]+"]")
     
         }
-        for(index=0; index<data.length; index++)
+        for(var index=0; index<data.length; index++)
         {
             if (data.charCodeAt(index) < 0x20 && data.charCodeAt(index) != 9 && data.charCodeAt(index) != 10) {
                 data = data.substring(0,index) + "[\\" + data.charCodeAt(index) + "]" + data.substring(index+1,data.length)

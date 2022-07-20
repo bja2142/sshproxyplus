@@ -7,8 +7,8 @@ jQuery.noConflict()
 jQuery(document).ready(function() {
     terminal_reader = new TerminalReader("terminal_reader")
     terminal_reader.initialize()
-    init_query_socket();
-    fetch_old_session_list();
+    //init_query_socket();
+    //fetch_old_session_list();
     /*global_terminal = new Terminal({convertEol: true});
     const fitAddon = new FitAddon.FitAddon();
     global_terminal.loadAddon(fitAddon);
@@ -23,8 +23,7 @@ jQuery(document).ready(function() {
         parseInt(jQuery("#terminal").css("height").slice(0,-2)) / global_terminal.rows 
     
     global_fit_addon = fitAddon;*/
-    setInterval(fetch_old_session_list,10*1000);
+    //setInterval(fetch_old_session_list,10*1000);
     read_hashes()
-
 });
 

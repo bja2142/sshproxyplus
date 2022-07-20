@@ -12,7 +12,7 @@ import (
 const SESSION_VIEWER_TYPE_SINGLE = 0
 const SESSION_VIEWER_TYPE_LIST 	 = 1
 
-const SESSION_VIEWER_SECRET_LEN	 = 32
+const SESSION_VIEWER_SECRET_LEN	 = 64
 
 const SESSION_VIEWER_EXPIRATION = -1
 
@@ -47,20 +47,22 @@ func (viewer *proxySessionViewer) typeIsList() bool {
 	return viewer.viewer_type == SESSION_VIEWER_TYPE_LIST
 }
 
-func (viewer *proxySessionViewer) getSessions() map[string]*sessionContext {
+func (viewer *proxySessionViewer) getSessions() (map[string]*sessionContext, []string) {
+	session_keys := make([]string, 0)
 	user_key := viewer.user.getKey()
-	if  _, ok := viewer.proxy.sessions[user_key]; ok {
+	if  _, ok := viewer.proxy.userSessions[user_key]; ok {
 		if viewer.typeIsSingle() {
 			finalMap := make(map[string]*sessionContext)
-			if _, ok := viewer.proxy.sessions[user_key][viewer.sessionKey]; ok {
-				finalMap[viewer.sessionKey] = viewer.proxy.sessions[user_key][viewer.sessionKey]
+			if _, ok := viewer.proxy.userSessions[user_key][viewer.sessionKey]; ok {
+				finalMap[viewer.sessionKey] = viewer.proxy.userSessions[user_key][viewer.sessionKey]
+				session_keys = append(session_keys,viewer.sessionKey)
 			}
-			return finalMap
+			return finalMap, session_keys
 		} else {
-			return viewer.proxy.sessions[user_key] 
+			return viewer.proxy.userSessions[user_key], viewer.proxy.ListAllUserSessions(user_key)
 		}
 	} else {
-		return make(map[string]*sessionContext)
+		return make(map[string]*sessionContext), session_keys
 	}
 }
 

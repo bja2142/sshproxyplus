@@ -374,6 +374,19 @@ func (session * sessionContext) makeNewSignal() chan int {
 	return new_msg_signal
 }
 
+func (session * sessionContext) removeSignal(signal chan int) {
+	session.mutex.Lock()
+	for index, val := range session.msg_signal {
+		if val == signal {
+			session.msg_signal[index] = session.msg_signal[len(session.msg_signal)-1]
+			session.msg_signal = session.msg_signal[:len(session.msg_signal)-1]
+			break
+		}
+	}
+	session.mutex.Unlock()
+}
+
+
 
 
 type channelWrapper struct {
