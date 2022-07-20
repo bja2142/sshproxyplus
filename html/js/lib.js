@@ -34,8 +34,13 @@ function init_query_socket() {
     let socket = new WebSocket(build_sock_addr()+"/socket")
     var this_timer = -1
     socket.onmessage = (event) => {
-    
-        add_session_to_list(JSON.parse(event.data))
+        try {
+            data = JSON.parse(event.data);
+        } catch {
+            console.log("JSON parse error on:",event.data)
+            return
+        }
+        add_session_to_list(data)
       };
 
     socket.onclose = (event) => {
@@ -232,7 +237,12 @@ function list_session(viewer_key, auto_play_item, session_key, use_viewer)
     socket.onmessage = (event) => {
     
         console.log(event)
-        data = JSON.parse(event.data);
+        try {
+            data = JSON.parse(event.data);
+        } catch {
+            console.log("JSON parse error on:",event.data)
+            return
+        }
         if(auto_play_item)
         {
             if(data.length>0)

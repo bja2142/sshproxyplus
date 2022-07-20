@@ -35,7 +35,7 @@ type session_info struct {
 
 func buildWebSessionInfoList(sessions map[string]*sessionContext, sessions_keys []string, user string, secret string) []session_info {
 	session_list := make([]session_info, len(sessions_keys))
-	log.Printf("%v,%v,%v\n",len(sessions_keys),sessions_keys,sessions)
+	//log.Printf("%v,%v,%v\n",len(sessions_keys),sessions_keys,sessions)
 	for index := 0; index < len(sessions_keys); index ++ {
 
 		session_key := sessions_keys[index]
@@ -253,26 +253,42 @@ func (server *proxyWebServer) socketHandler(w http.ResponseWriter, r *http.Reque
         }
 		switch string(message) {
 			case "list-active":
-				sessions_json, err := json.Marshal(server.getAllSessionInfo(true))
-				if err != nil {
-					log.Println("Error during marshaling json: ", err)
-					break
-				}
-				err = conn.WriteMessage(websocket.TextMessage,sessions_json)
-				if err != nil {
-					log.Println("Error during message writing:", err)
-					break
-				}
+				if server.proxy.publicAccess {
+					sessions_json, err := json.Marshal(server.getAllSessionInfo(true))
+					if err != nil {
+						log.Println("Error during marshaling json: ", err)
+						break
+					}
+					err = conn.WriteMessage(websocket.TextMessage,sessions_json)
+					if err != nil {
+						log.Println("Error during message writing:", err)
+						break
+					}
+				} else {
+					err = conn.WriteMessage(websocket.TextMessage,[]byte("public query disabled"))
+					if err != nil {
+						log.Println("Error during message writing:", err)
+						break
+					}
+				}				
 			case "list-all":
-				sessions_json, err := json.Marshal(server.getAllSessionInfo(false))
-				if err != nil {
-					log.Println("Error during marshaling json: ", err)
-					break
-				}
-				err = conn.WriteMessage(websocket.TextMessage,sessions_json)
-				if err != nil {
-					log.Println("Error during message writing:", err)
-					break
+				if server.proxy.publicAccess {
+					sessions_json, err := json.Marshal(server.getAllSessionInfo(false))
+					if err != nil {
+						log.Println("Error during marshaling json: ", err)
+						break
+					}
+					err = conn.WriteMessage(websocket.TextMessage,sessions_json)
+					if err != nil {
+						log.Println("Error during message writing:", err)
+						break
+					}
+				} else {
+					err = conn.WriteMessage(websocket.TextMessage,[]byte("public query disabled"))
+					if err != nil {
+						log.Println("Error during message writing:", err)
+						break
+					}
 				}
 			case "viewer-get":
 				server.sessionViewerSocketGet(conn)

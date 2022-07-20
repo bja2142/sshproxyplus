@@ -140,7 +140,7 @@ func parseArgsForNewProxyContext() *proxyContext {
 	web_listen_port := flag.Int("web-port", 8080, "web server listen port; defaults to 8080")
 	server_version := flag.String("server-version", "SSH-2.0-OpenSSH_7.9p1 Raspbian-10", "server version to use")
 	base_URI_option	:= flag.String("base-uri","auto","override base URI when crafting signed URLs; default is to auto-detect")
-	public_access := flag.Bool("public-view", true, "all viewers to query sessions without secret URL")
+	public_access := flag.Bool("public-view", false, "allow viewers to query sessions without secret URL")
 	//TODO: add ability to load and save from json config file
 	flag.Parse()
 
