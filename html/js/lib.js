@@ -37,6 +37,143 @@ function init_query_socket() {
     }
 }
 
+//TODO: handle sessions that aren't active as a replay
+// should involve rewriting the interface to query for active
+// sessions and have it put inactive sessions in a separate spot
+// on the screen
+// but maybe this is better only for non-live?
+
+function get_viewer_session_from_socket(session)
+{
+    let socket = new WebSocket(build_sock_addr()+"/socket")
+    socket.onopen = function() {
+        if(session.active) {
+            terminal_reader.set_session_mode_live()
+        }
+        socket.send('viewer-get');
+        socket.send(session.secret)
+        socket.send(session.key);
+        
+    }
+    //TODO: move next function to its own spot to allow code reuse
+
+    socket.onmessage = (event) => {
+        try {
+            chunk = JSON.parse(event.data)
+            
+        } catch {
+            console.log("error parsing event",event)
+            return
+        }
+        console.log("loading",chunk,terminal_reader.events.length)
+        terminal_reader.load_events(new TerminalEvent(chunk))
+        console.log(terminal_reader.events.length)
+
+        var pass_socket = socket
+        terminal_reader.process_next_event(function() {
+            pass_socket.send('ack');
+        });
+        if(chunk.type=="session-stop")
+        {
+            socket.close()
+        }
+    }
+    socket.onclose = (event) =>
+    {
+        console.log("session socket closing")
+        terminal_reader.set_session_mode_disconnected()
+    }
+    active_session_sockets[session.key] = socket
+}
+
+function get_public_session_from_socket(session)
+{
+    let socket = new WebSocket(build_sock_addr()+"/socket")
+    socket.onopen = function() {
+        if(session.active) {
+            terminal_reader.set_session_mode_live()
+        }
+        socket.send('get');
+        socket.send(session.key);
+        
+    }
+    socket.onmessage = (event) => {
+        try {
+            chunk = JSON.parse(event.data)
+            
+        } catch {
+            filename =session.key+".log.json";
+            url_hash = "#replay&"+filename
+            window.location.hash=url_hash
+            read_hashes()
+            return
+        }
+        console.log("loading",chunk,terminal_reader.events.length)
+        terminal_reader.load_events(new TerminalEvent(chunk))
+        console.log(terminal_reader.events.length)
+
+        var pass_socket = socket
+        terminal_reader.process_next_event(function() {
+            pass_socket.send('ack');
+        });
+        if(chunk.type=="session-stop")
+        {
+            socket.close()
+        }
+    }
+    socket.onclose = (event) =>
+    {
+        console.log("session socket closing")
+        terminal_reader.set_session_mode_disconnected()
+    }
+    active_session_sockets[session.key] = socket
+}
+
+function get_session_from_socket(session,clickTarget)
+{
+    console.log(session)
+    mark_selected(clickTarget);
+    terminal_reader.reset()
+    if(session.secret != undefined)
+    {
+        get_viewer_session_from_socket(session)
+    } else {
+        get_public_session_from_socket(session)
+    }
+}
+
+
+
+
+function list_viewer_session(viwer_key)
+{
+    let socket = new WebSocket(build_sock_addr()+"/socket")
+    socket.onmessage = (event) => {
+    
+        console.log(event)
+        add_viewer_session_to_list(JSON.parse(event.data))
+        };
+
+    socket.onclose = (event) => {
+        console.log(event)
+        //jQuery("#active_session_list_container").removeClass("live").addClass("inactive")
+    }
+    
+    
+    socket.onopen = function() {
+        //jQuery("#active_session_list_container").removeClass("inactive").addClass("live")
+        socket.send('viewer-list');
+        socket.send(viewer_key);
+        setInterval(function() {
+            jQuery("#session_list").empty();
+            jQuery("#old_session_list").empty();
+            socket.send('viewer-list');
+            socket.send(viewer_key);
+            },5000 )
+        
+    }
+}
+
 function read_hashes()
 {
     if(window.location.hash != "" && window.location.hash.indexOf("&") != -1)
@@ -50,7 +187,27 @@ function read_hashes()
         } else if (action_type == "replay")
         {
             fetch_session('sessions/'+action_key,jQuery("a[href*='"+window.location.hash+"']")[0])
+        } else if (action_type == "signed-viewer") {
+            if (action_key.indexOf("/") != -1) {
+                viewer_elements = action_key.split("/")
+                viewer_key = viewer_elements[0]
+                viewer_session = viewer_elements[1]
+                session_object = {secret: viewer_key, key: viewer_session, active: true}
+                get_session_from_socket(session_object,jQuery("a[href*='"+window.location.hash+"']")[0])
+            } else {
+                viewer_key = action_key
+                list_viewer_session(viewer_key)
+            }
+
+        } else if (action_type == "signed-session") {
+            fetch_viewer_single_session(action_key,jQuery("a[href*='"+window.location.hash+"']")[0])
         }
+    } else {
+        //TODO: store interval
+        //clear interval when resetting it
+        setInterval(fetch_old_session_list,10*1000);
+        init_query_socket();
+        fetch_old_session_list();
     }
     
 }
@@ -62,23 +219,63 @@ function seconds_to_str(sec)
     return new Date(sec * 1000).toISOString().substring(11, 19);
 }
 
-function add_session_to_list(sessions)
+function add_link_to_list(session, href, onclick_function,display_text,list_id)
 {
-    for(i=0; i<sessions.length; i++)
-    {
-        session = sessions[i]
         
         li = jQuery("<li />")
         anchor = jQuery("<a />")
-        anchor.attr("href","#live&"+session.key)
-        anchor.attr("onclick","javascript:init_session_tty('"+session.key+"',this)")
-        anchor.text(session.key + " (" + seconds_to_str(session.length) +")")
+        anchor.attr("href",href)
+        anchor.click(onclick_function)
+        //anchor.attr("onclick",onclick_text) // TODO: replace this with function
+        // and add ability to capture the session item as an object
+        // in function() {}
+        anchor.text(display_text)
         if(session.key in active_session_sockets)
         {
             anchor.addClass("selected")
         }
         li.append(anchor)
-        jQuery("#session_list").prepend(li)
+        jQuery(list_id).prepend(li)
+}
+
+function add_viewer_session_to_list(sessions)
+{
+    for(i=0; i<sessions.length; i++)
+    {
+        session = sessions[i]
+        if(session.active)
+        {
+            add_link_to_list(
+                session, 
+                "#signed-viewer&"+session.secret+"/"+session.key, 
+                function(event) {get_session_from_socket(session,event.target);},
+                session.key + " (" + seconds_to_str(session.length) +")",
+                "#session_list"
+            )
+        } else {
+            add_link_to_list(
+                session, 
+                "#signed-viewer&"+session.secret+"/"+session.key, 
+                function(event) {get_session_from_socket(session,event.target);},
+                session.key + " (" + seconds_to_str(session.length) +")",
+                "#old_session_list"
+            )
+        }
+       
+    }
+}
+function add_session_to_list(sessions)
+{
+    for(i=0; i<sessions.length; i++)
+    {
+        session = sessions[i]
+        add_link_to_list(
+            session, 
+            "#live&"+session.key, 
+            function(event) {init_session_tty(session.key,event.target);},
+            session.key + " (" + seconds_to_str(session.length) +")",
+            "#session_list"
+        )
     }
 }
 
