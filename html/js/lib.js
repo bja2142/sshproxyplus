@@ -329,7 +329,7 @@ function close_query_sockets()
     while(active_query_sockets.length >0)
     {
         socket = active_query_sockets.pop()
-        scoket.close()
+        socket.close()
     }
 }
 
@@ -343,7 +343,7 @@ function close_session_sockets()
 
 function read_hashes()
 {
-    
+    reset_timers_and_query_sockets()
     if(window.location.hash != "" && window.location.hash.indexOf("&") != -1)
     {
         hash_elements = window.location.hash.slice(1).split("&")
