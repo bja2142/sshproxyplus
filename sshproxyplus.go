@@ -44,7 +44,7 @@ func main() {
 
 	cur_proxy := parseArgsForNewProxyContext()
 
-	cur_proxy.addProxyUser(&proxyUser{"bobbytables","","127.0.0.1:22","ben","password"})
+	//cur_proxy.addProxyUser(&proxyUser{"testuser","","127.0.0.1:22","ben","password"})
 
 
 	go cur_proxy.startProxy()

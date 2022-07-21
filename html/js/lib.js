@@ -58,7 +58,7 @@ function init_query_socket() {
             //jQuery("#old_session_list").empty();
             socket.send('list-active');
             fetch_old_session_list()},
-            5000)
+            10000)
         
     }
     active_query_sockets.push(socket)
@@ -375,7 +375,7 @@ function read_hashes()
             return
         }
     } 
-    run_timer(fetch_old_session_list);
+    //run_timer(fetch_old_session_list);
     init_query_socket();
 }
 
