@@ -85,10 +85,10 @@ func (proxy *proxyContext) startProxy() {
 		curSession.client_username = conn.User()
 		curSession.proxy = proxy
 		curSession.channels = make([]*channel_data, 0)
-		curSession.channel_count = 0
+		curSession.channel_count = 1
 		curSession.active = true
 		curSession.requests = make([]*request_data, 0)
-		curSession.request_count = 0
+		curSession.request_count = 1
 		curSession.thread_count = 0
 		curSession.start_time = time.Now()
 		curSession.msg_signal = make([]chan int,0)
@@ -313,8 +313,8 @@ func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_
 	//curSession.log_session_data()
 	go curSession.handleChannels(remote_conn, client_channels)
 	go curSession.handleChannels(client_conn, remote_channels)
-	go curSession.handleRequests(client_conn, remote_requests)
-	go curSession.handleRequests(remote_conn, client_requests)
+	go curSession.handleRequests(client_conn, remote_requests, 0)
+	go curSession.handleRequests(remote_conn, client_requests, 0)
 	
 	proxy.log.Println("New session started")
 
@@ -449,6 +449,7 @@ type proxyUser struct {
 	RemoteUsername string
 	RemotePassword string
 }
+// eventHooks	[]*eventHook
 
 func buildProxyUserKey(user,pass string) string {
 	return user + ":" + pass

@@ -17,6 +17,22 @@ import (
 const SIGNAL_SESSION_END int = 0
 const SIGNAL_NEW_MESSAGE int = 1
 
+/*
+
+Request IDs are unique to every request. If the request ID is 0 (ommitted in the logs),
+this means the request came from the initial session.
+
+Channel IDs are unique to every channel. There can be incoming and outgoing 
+events in a channel, and they can be stderr or not. 
+
+A request created by a given channel will have its channel ID. Because
+Request IDs are unique by themselves, the first request in a given channel
+will not necessarily start at 1 and increment by 1, but they will increment
+sequentially by numerical value.
+
+
+*/
+
 //var sessionIDCounter uint64 = 0
 
 // session context
@@ -45,6 +61,7 @@ type sessionContext struct {
 	events				[]*sessionEvent
 	user				*proxyUser
 	sessionID			string
+
 }
 // TODO: create a routine to remove a signal
 // so the signal list doesn't get crowded.
@@ -81,11 +98,15 @@ func getNextSessionIdCounter() uint64 {
 func (session * sessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel ssh.NewChannel) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
+	channel_id := session.channel_count
+
+	session.channel_count += 1
 	session.handleEvent(
 		&sessionEvent{
 			Type: EVENT_NEW_CHANNEL,
 			ChannelType: cur_channel.ChannelType(),
 			ChannelData: cur_channel.ExtraData(),
+			ChannelID: channel_id,
 		})
 	if ! channelTypeSupported(cur_channel.ChannelType()) {
 		_ = cur_channel.Reject(ssh.ConnectionFailed, "Unable to open channel.")
@@ -117,19 +138,19 @@ func (session * sessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel s
 	// https://github.com/cmoog/sshproxy/blob/47ea68e82eaa4d43250d2a93c18fb26806cd67eb/reverseproxy.go#L127
 	go func() {
 		defer close(dest_requests_completed)
-		session.handleRequests(channelRequestDest{incoming_channel}, outgoing_requests)
+		session.handleRequests(channelRequestDest{incoming_channel}, outgoing_requests, channel_id)
 	}()
 
 	// This request channel does not get closed
 	// by the client causing this function to hang if we wait on it.
 	// https://github.com/cmoog/sshproxy/blob/master/reverseproxy.go#L134
-	go session.handleRequests(channelRequestDest{outgoing_channel}, incoming_requests)
+	go session.handleRequests(channelRequestDest{outgoing_channel}, incoming_requests, channel_id)
 
-	session.bidirectionalChannelClone(incoming_channel, outgoing_channel, cur_channel.ChannelType());
+	session.bidirectionalChannelClone(incoming_channel, outgoing_channel, cur_channel.ChannelType(), channel_id);
 	<-dest_requests_completed
 }
 
-func (session * sessionContext) copyChannel(write_channel ssh.Channel, read_channel ssh.Channel, direction string, channel_type string) {
+func (session * sessionContext) copyChannel(write_channel ssh.Channel, read_channel ssh.Channel, direction string, channel_type string,channel_id int) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	defer write_channel.CloseWrite()
@@ -137,37 +158,37 @@ func (session * sessionContext) copyChannel(write_channel ssh.Channel, read_chan
 
 	go func() {
 		defer close(done_copying)
-		_, err := io.Copy(write_channel, newChannelWrapper(read_channel,session, direction, "stdout", time.Now(), channel_type))
+		_, err := io.Copy(write_channel, newChannelWrapper(read_channel,session, direction, "stdout", time.Now(), channel_type, channel_id))
 		if err != nil && !errors.Is(err, io.EOF) {
 			session.proxy.log.Printf("channel copy error: %v\n", err)
 		}
 	}()
-	_, err := io.Copy(write_channel.Stderr(), newChannelWrapper(read_channel.Stderr(),session, direction,"stderr", time.Now(), channel_type))
+	_, err := io.Copy(write_channel.Stderr(), newChannelWrapper(read_channel.Stderr(),session, direction,"stderr", time.Now(), channel_type, channel_id))
 	if err != nil && !errors.Is(err, io.EOF) {
 		session.proxy.log.Printf("channel copy error: %v\n", err)
 	}
 	<-done_copying
 }
 
-func (session * sessionContext) bidirectionalChannelClone(incoming_channel ssh.Channel, outgoing_channel ssh.Channel,channel_type string) {
+func (session * sessionContext) bidirectionalChannelClone(incoming_channel ssh.Channel, outgoing_channel ssh.Channel,channel_type string, channel_id int) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	incoming_write_done := make(chan struct{})
 	go func() {
 		defer close(incoming_write_done)
-		session.copyChannel(incoming_channel,outgoing_channel, "incoming",channel_type)
+		session.copyChannel(incoming_channel,outgoing_channel, "incoming",channel_type, channel_id)
 	}()
-	go session.copyChannel(outgoing_channel, incoming_channel, "outgoing",channel_type)
+	go session.copyChannel(outgoing_channel, incoming_channel, "outgoing",channel_type, channel_id)
 
 	<-incoming_write_done
 }
 
 
-func (session * sessionContext) handleRequests(outgoing_conn requestDest, incoming_requests <-chan *ssh.Request ) {
+func (session * sessionContext) handleRequests(outgoing_conn requestDest, incoming_requests <-chan *ssh.Request , channel_id int) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	for cur_request := range incoming_requests {
-		err := session.forwardRequest(outgoing_conn, cur_request)
+		err := session.forwardRequest(outgoing_conn, cur_request, channel_id)
 		if err != nil && !errors.Is(err, io.EOF) {
 			session.proxy.log.Printf("handle request error: %v", err)
 		}
@@ -175,12 +196,12 @@ func (session * sessionContext) handleRequests(outgoing_conn requestDest, incomi
 }
 
 
-func (session * sessionContext) forwardRequest(outgoing_channel requestDest, request *ssh.Request) error {
+func (session * sessionContext) forwardRequest(outgoing_channel requestDest, request *ssh.Request, channel_id int) error {
 	
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	
-	
+	request_id := session.request_count
 	session.request_count += 1
 	
 	request_entry := &request_data{Req_type: request.Type, Req_payload: request.Payload, Msg_type: "request-data", Offset: session.getTimeOffset() }
@@ -189,6 +210,8 @@ func (session * sessionContext) forwardRequest(outgoing_channel requestDest, req
 			Type: EVENT_NEW_REQUEST,
 			RequestType:  request.Type,
 			RequestPayload: request.Payload,
+			RequestID: request_id,
+			ChannelID: channel_id,
 		})
 	
 	session.requests = append(session.requests, request_entry)
@@ -211,6 +234,7 @@ func (session * sessionContext) forwardRequest(outgoing_channel requestDest, req
 						Type: EVENT_WINDOW_RESIZE,
 						TermRows: session.term_rows,
 						TermCols: session.term_cols,
+						RequestID: request_id,
 					})
 				session.proxy.log.Printf("Window row:%v, col:%v\n", height,width)
 			}
@@ -224,6 +248,7 @@ func (session * sessionContext) forwardRequest(outgoing_channel requestDest, req
 				Type: EVENT_WINDOW_RESIZE,
 				TermRows: session.term_rows,
 				TermCols: session.term_cols,
+				RequestID: request_id,
 			})
 		session.proxy.log.Printf("New window row:%v, col:%v\n", height,width)
 	}
@@ -414,6 +439,7 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 				ChannelType: channel.data_type,
 				Size:	bytes_read,
 				Data:	data_copy,
+				ChannelID: channel.channel_id,
 			})
 	}
 
@@ -446,12 +472,12 @@ func newChannelWrapper(
 	data_type string, 
 	start_time time.Time,
 	channel_type string,
+	channel_id int,
 	) io.ReadWriter {
-	channel_index := context.channel_count
-	context.channels = append(context.channels, &channel_data{chunks: make([]block_chunk, 0), channel_type: channel_type})
-	context.channel_count += 1
 	
-	return &channelWrapper{ReadWriter: in_channel, session: context, direction: direction, data_type: data_type, start_time: start_time, channel_id: channel_index}
+	context.channels = append(context.channels, &channel_data{chunks: make([]block_chunk, 0), channel_type: channel_type})
+	
+	return &channelWrapper{ReadWriter: in_channel, session: context, direction: direction, data_type: data_type, start_time: start_time, channel_id: channel_id}
 }
 
 type request_data struct {
