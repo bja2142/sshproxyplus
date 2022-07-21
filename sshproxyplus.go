@@ -47,6 +47,16 @@ func main() {
 	//cur_proxy.addProxyUser(&proxyUser{"testuser","","127.0.0.1:22","ben","password"})
 
 
+	controller := proxyController{
+		socketType: PROXY_CONTROLLER_SOCKET_PLAIN,
+		socketHost: "0.0.0.0:9999",
+		presharedKey: "key",
+	}
+
+	controller.listen()
+
+	return
+
 	go cur_proxy.startProxy()
 
 	webServer := &proxyWebServer{

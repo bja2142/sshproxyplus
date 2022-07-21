@@ -34,6 +34,8 @@ type sessionEvent struct {
 	ChannelData		[]byte		`json:"channel_data,omitempty"`
 	RequestType		string		`json:"request_type,omitempty"`
 	RequestPayload	[]byte		`json:"request_payload,omitempty"`
+	ChannelID		int			`json:"channel_id,omitempty"`
+	RequestID		int			`json:"request_id,omitempty"`
 }
 
 func (event *sessionEvent) toJSON() string {
