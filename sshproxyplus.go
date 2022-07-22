@@ -48,9 +48,11 @@ func main() {
 
 
 	controller := proxyController{
-		socketType: PROXY_CONTROLLER_SOCKET_PLAIN,
+		socketType: PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET,
 		socketHost: "0.0.0.0:9999",
 		presharedKey: "key",
+		TLSKey: "tls_keys/server.key",
+		TLSCert: "tls_keys/server.crt",
 	}
 
 	controller.listen()
