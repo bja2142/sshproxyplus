@@ -62,7 +62,7 @@ func buildWebSessionInfoList(sessions map[string]*sessionContext, sessions_keys 
 func (server *proxyWebServer) getUserSessionInfo(viewer *proxySessionViewer) []session_info {
 	sessions, sessions_keys := viewer.getSessions()
 
-	return buildWebSessionInfoList(sessions, sessions_keys, viewer.user.getKey(), viewer.secret)
+	return buildWebSessionInfoList(sessions, sessions_keys, viewer.User.getKey(), viewer.Secret)
 }
 
 func (server *proxyWebServer) getAllSessionInfo(active_only bool) []session_info {
@@ -253,7 +253,7 @@ func (server *proxyWebServer) socketHandler(w http.ResponseWriter, r *http.Reque
         }
 		switch string(message) {
 			case "list-active":
-				if server.proxy.publicAccess {
+				if server.proxy.PublicAccess {
 					sessions_json, err := json.Marshal(server.getAllSessionInfo(true))
 					if err != nil {
 						log.Println("Error during marshaling json: ", err)
@@ -272,7 +272,7 @@ func (server *proxyWebServer) socketHandler(w http.ResponseWriter, r *http.Reque
 					}
 				}				
 			case "list-all":
-				if server.proxy.publicAccess {
+				if server.proxy.PublicAccess {
 					sessions_json, err := json.Marshal(server.getAllSessionInfo(false))
 					if err != nil {
 						log.Println("Error during marshaling json: ", err)
@@ -330,8 +330,8 @@ var upgrader = websocket.Upgrader{
 func (server *proxyWebServer) ServeWebSocketSessionServer() {
 
 	host := server.listenHost
-	tls_cert := *server.proxy.tls_cert
-	tls_key := *server.proxy.tls_key
+	TLSCert := server.proxy.TLSCert
+	TLSKey := server.proxy.TLSKey
 	
 	fs := http.FileServer(http.Dir("./html"))
 	http.Handle("/", fs)
@@ -339,8 +339,8 @@ func (server *proxyWebServer) ServeWebSocketSessionServer() {
     //http.HandleFunc("/", home)
 
 	Logger.Printf("starting web socket server on %v\n",host)
-	if tls_cert != "." && tls_key != "." {
-		http.ListenAndServeTLS(host, tls_cert, tls_key,nil)
+	if TLSCert != "." && TLSKey != "." {
+		http.ListenAndServeTLS(host, TLSCert, TLSKey,nil)
 	} else {
 		http.ListenAndServe(host, nil)
 	}
@@ -350,5 +350,5 @@ func (server *proxyWebServer) ServeWebSocketSessionServer() {
 type proxyWebServer struct {
 	proxy	*proxyContext
 	listenHost	string
-	baseURI		string
+	BaseURI		string
 }

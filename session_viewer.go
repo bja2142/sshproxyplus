@@ -17,23 +17,23 @@ const SESSION_VIEWER_SECRET_LEN	 = 64
 const SESSION_VIEWER_EXPIRATION = -1
 
 type proxySessionViewer struct {
-	viewer_type int
-	secret string
+	ViewerType int
+	Secret string
 	proxy *proxyContext
-	user  *proxyUser
-	sessionKey string
+	User  *proxyUser
+	SessionKey string
 	expiration int64
 }
 
 func (viewer *proxySessionViewer) buildSignedURL() string {
-	return fmt.Sprintf("%v/#signed-viewer&%v",viewer.proxy.baseURI,viewer.secret)
+	return fmt.Sprintf("%v/#signed-viewer&%v",viewer.proxy.BaseURI,viewer.Secret)
 }
 
-func createNewSessionViewer(viewer_type int) *proxySessionViewer {
+func createNewSessionViewer(ViewerType int) *proxySessionViewer {
 	viewer := &proxySessionViewer{}
 	var err error
-	viewer.viewer_type = viewer_type
-	viewer.secret, err = GenerateRandomString(SESSION_VIEWER_SECRET_LEN)
+	viewer.ViewerType = ViewerType
+	viewer.Secret, err = GenerateRandomString(SESSION_VIEWER_SECRET_LEN)
 
 	viewer.expiration = SESSION_VIEWER_EXPIRATION
 	if err != nil {
@@ -44,22 +44,22 @@ func createNewSessionViewer(viewer_type int) *proxySessionViewer {
 }
 
 func (viewer *proxySessionViewer) typeIsSingle() bool {
-	return viewer.viewer_type == SESSION_VIEWER_TYPE_SINGLE
+	return viewer.ViewerType == SESSION_VIEWER_TYPE_SINGLE
 }
 
 func (viewer *proxySessionViewer) typeIsList() bool {
-	return viewer.viewer_type == SESSION_VIEWER_TYPE_LIST
+	return viewer.ViewerType == SESSION_VIEWER_TYPE_LIST
 }
 
 func (viewer *proxySessionViewer) getSessions() (map[string]*sessionContext, []string) {
 	session_keys := make([]string, 0)
-	user_key := viewer.user.getKey()
+	user_key := viewer.User.getKey()
 	if  _, ok := viewer.proxy.userSessions[user_key]; ok {
 		if viewer.typeIsSingle() {
 			finalMap := make(map[string]*sessionContext)
-			if _, ok := viewer.proxy.userSessions[user_key][viewer.sessionKey]; ok {
-				finalMap[viewer.sessionKey] = viewer.proxy.userSessions[user_key][viewer.sessionKey]
-				session_keys = append(session_keys,viewer.sessionKey)
+			if _, ok := viewer.proxy.userSessions[user_key][viewer.SessionKey]; ok {
+				finalMap[viewer.SessionKey] = viewer.proxy.userSessions[user_key][viewer.SessionKey]
+				session_keys = append(session_keys,viewer.SessionKey)
 			}
 			return finalMap, session_keys
 		} else {

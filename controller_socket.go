@@ -9,7 +9,6 @@ import (
 	"bufio"
 	"github.com/gorilla/websocket"
 	"net/http"
-
 )
 
 
@@ -199,7 +198,6 @@ func (socket *proxyControllerSocketWeb) Stop() {
 		socket.server.Close()
 	}
 }
-
 
 
 type proxyControllerSocketHandler func(proxyControllerSocketClient, proxyControllerSocket)
