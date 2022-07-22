@@ -32,8 +32,6 @@ import (
 
 var (
 	Logger *log.Logger
-	// keys are "listen_ip:listen_port:client_ip:client:port"
-	//SshSessions map[string]*sessionContext 
 )
 
 //TODO: deprecate SshSessions
@@ -48,22 +46,26 @@ func main() {
 
 
 	controller := proxyController{
-		socketType: PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET,
-		socketHost: "0.0.0.0:9999",
-		presharedKey: "key",
-		TLSKey: "tls_keys/server.key",
-		TLSCert: "tls_keys/server.crt",
+		SocketType: PROXY_CONTROLLER_SOCKET_PLAIN,
+		SocketHost: "0.0.0.0:9999",
+		PresharedKey: "key",
+		TLSKey: "TLSKeys/server.key",
+		TLSCert: "TLSKeys/server.crt",
+		Proxies: make(map[uint64]*proxyContext),
 	}
 
-	controller.listen()
+	go controller.listen()
 
-	return
 
-	go cur_proxy.startProxy()
+	defer controller.Stop()
+
+	proxyID := controller.addExistingProxy(cur_proxy)
+
+	go controller.startProxy(proxyID)
 
 	webServer := &proxyWebServer{
 		proxy: cur_proxy, 
-		listenHost: "0.0.0.0:"+strconv.Itoa(*cur_proxy.web_listen_port),
+		listenHost: "0.0.0.0:"+strconv.Itoa(cur_proxy.WebListenPort),
 	}
 
 	go webServer.ServeWebSocketSessionServer()
@@ -74,10 +76,10 @@ func main() {
 		if input == "q" {
 			break;
 		} else if input == "a" {
-			cur_proxy.activate()
+			controller.activateProxy(proxyID)
 			Logger.Println("activating")
 		}  else if input == "d" {
-			cur_proxy.deactivate()
+			ccontroller.deactivateProxy(proxyID)
 			Logger.Println("deactivating")
 			
 		} else if input == "k" {
@@ -137,19 +139,19 @@ func initLogging(filename *string) {
 
 func parseArgsForNewProxyContext() *proxyContext {
 
-	server_ssh_port := flag.Int("dport",22, "destination ssh server port; this field is only used if the the (Users proxyUser) field is empty")
-	server_ssh_ip := flag.String("dip","127.0.0.1", "destination ssh server ip; this field is only used if the the (Users proxyUser) field is empty")
+	DefaultRemotePort := flag.Int("dport",22, "destination ssh server port; this field is only used if the the (Users proxyUser) field is empty")
+	DefaultRemoteIP := flag.String("dip","127.0.0.1", "destination ssh server ip; this field is only used if the the (Users proxyUser) field is empty")
 	proxy_listen_port := flag.Int("lport", 2222, "proxy listen port")
 	proxy_listen_ip   := flag.String("lip", "0.0.0.0", "ip for proxy to bind to")
 	proxy_key   := flag.String("lkey", "autogen", "private key for proxy to use; defaults to autogen new key")
 	log_file := flag.String("log", "-", "file to log to; defaults to stdout")
-	session_folder := flag.String("sess-dir", ".", "directory to write sessions to and to read from; defaults to the current directory")
-	tls_cert := flag.String("tls_cert", ".", "TLS certificate to use for web; defaults to plaintext")
-	tls_key := flag.String("tls_key", ".", "TLS key to use for web; defaults to plaintext")
+	SessionFolder := flag.String("sess-dir", ".", "directory to write sessions to and to read from; defaults to the current directory")
+	TLSCert := flag.String("TLSCert", ".", "TLS certificate to use for web; defaults to plaintext")
+	TLSKey := flag.String("TLSKey", ".", "TLS key to use for web; defaults to plaintext")
 	override_user := flag.String("override-user", "", "Override client-supplied username when proxying to remote server; this field is only used if the the (Users proxyUser) field is empty")
-	override_password := flag.String("override-pass","","Overrides client-supplied password when proxying to remote server; this field is only used if the the (Users proxyUser) field is empty")
+	OverridePassword := flag.String("override-pass","","Overrides client-supplied password when proxying to remote server; this field is only used if the the (Users proxyUser) field is empty")
 	require_valid_password := flag.Bool("require-valid-password",false, "requires a valid password to authenticate; if this field is false then the presented credentials will be passed to the port and server provided in dport and dip; this field is ignored if (Users proxy) field is not empty")
-	web_listen_port := flag.Int("web-port", 8080, "web server listen port; defaults to 8080")
+	WebListenPort := flag.Int("web-port", 8080, "web server listen port; defaults to 8080")
 	server_version := flag.String("server-version", "SSH-2.0-OpenSSH_7.9p1 Raspbian-10", "server version to use")
 	base_URI_option	:= flag.String("base-uri","auto","override base URI when crafting signed URLs; default is to auto-detect")
 	public_access := flag.Bool("public-view", false, "allow viewers to query sessions without secret URL")
@@ -180,9 +182,9 @@ func parseArgsForNewProxyContext() *proxyContext {
 	}
 
 	// https://freshman.tech/snippets/go/create-directory-if-not-exist/
-	if *session_folder != "." {
-		if _, err := os.Stat(*session_folder); errors.Is(err, os.ErrNotExist) {
-			err := os.Mkdir(*session_folder, os.ModePerm)
+	if *SessionFolder != "." {
+		if _, err := os.Stat(*SessionFolder); errors.Is(err, os.ErrNotExist) {
+			err := os.Mkdir(*SessionFolder, os.ModePerm)
 			if err != nil {
 				Logger.Println(err)
 			}
@@ -199,21 +201,21 @@ func parseArgsForNewProxyContext() *proxyContext {
 	}
 	Logger.Printf("Proxy using key with public key: %v\n",proxy_private_key.PublicKey().Marshal())
 
-	if _, err := os.Stat(*tls_key); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(*TLSKey); errors.Is(err, os.ErrNotExist) {
 		dot := "."
-		tls_key = &dot
+		TLSKey = &dot
 		
 	}
-	if _, err := os.Stat(*tls_cert); errors.Is(err, os.ErrNotExist) {
+	if _, err := os.Stat(*TLSCert); errors.Is(err, os.ErrNotExist) {
 		dot := "."
-		tls_cert = &dot
+		TLSCert = &dot
 	}
 
 	var base_URI string
 	if *base_URI_option == "auto" {
 		var protocol, hostname string
 		var err error
-		if *tls_cert != "." && *tls_key != "." {
+		if *TLSCert != "." && *TLSKey != "." {
 			protocol = "https"
 			hostname, err = os.Hostname()
 			if err != nil {
@@ -226,34 +228,30 @@ func parseArgsForNewProxyContext() *proxyContext {
 				hostname = "127.0.0.1"
 			}
 		}
-		base_URI = fmt.Sprintf("%v://%v:%v",protocol,hostname,*web_listen_port)
+		base_URI = fmt.Sprintf("%v://%v:%v",protocol,hostname,*WebListenPort)
 	} else {
 		base_URI = *base_URI_option
 	}
 
+	proxy := makeNewProxy()
+	proxy.DefaultRemotePort = *DefaultRemotePort
+	proxy.DefaultRemoteIP = *DefaultRemoteIP
+	proxy.ListenIP = *proxy_listen_ip
+	proxy.ListenPort = *proxy_listen_port
+	proxy.private_key = proxy_private_key
+	proxy.SessionFolder = *SessionFolder
+	proxy.TLSCert = *TLSCert
+	proxy.TLSKey = *TLSKey
+	proxy.OverridePassword = *OverridePassword
+	proxy.override_user = *override_user
+	proxy.WebListenPort = *WebListenPort
+	proxy.ServerVersion = *server_version
+	proxy.RequireValidPassword = *require_valid_password
+	proxy.BaseURI = base_URI	
+	proxy.PublicAccess = *public_access
+	proxy.log = Logger
 
-	return &proxyContext{
-		server_ssh_port: server_ssh_port,
-		server_ssh_ip: server_ssh_ip,
-		listen_ip: proxy_listen_ip,
-		listen_port: proxy_listen_port,
-		private_key: proxy_private_key,
-		log: Logger,
-		session_folder: session_folder,
-		tls_cert: tls_cert,
-		tls_key: tls_key,
-		override_password: *override_password,
-		override_user: *override_user,
-		web_listen_port: web_listen_port,
-		server_version: server_version,
-		RequireValidPassword: *require_valid_password,
-		Users: map[string]*proxyUser{},
-		userSessions: map[string]map[string]*sessionContext{},
-		allSessions: map[string]*sessionContext{},
-		viewers: map[string]*proxySessionViewer{},
-		baseURI:base_URI,	
-		publicAccess: *public_access,
-	}
+	return proxy
 }
 
 

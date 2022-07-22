@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"os"
 	"errors"
+	"log"
 )
 
 const SESSION_LIST_FN	string = ".session_list"
@@ -20,27 +21,29 @@ const ACTIVE_POLLING_DELAY time.Duration = 500* time.Millisecond
 // combination to a different remote
 // host
 type proxyContext struct {
-	server_ssh_port		*int
-	server_ssh_ip		*string
-	listen_ip			*string
-	listen_port			*int
+	running				bool
+	listener			net.Listener
+	DefaultRemotePort	int
+	DefaultRemoteIP		string
+	ListenIP			string
+	ListenPort			int
 	private_key			ssh.Signer
 	log					loggerInterface
-	session_folder		*string
-	tls_cert			*string
-	tls_key				*string
-	override_password	string
+	SessionFolder		string
+	TLSCert				string
+	TLSKey				string
+	OverridePassword	string
 	override_user		string
-	web_listen_port		*int
-	server_version		*string
+	WebListenPort		int
+	ServerVersion		string
 	Users 				map[string]*proxyUser
-	userSessions			map[string]map[string]*sessionContext
+	userSessions		map[string]map[string]*sessionContext
 	allSessions			map[string]*sessionContext 
 	RequireValidPassword	bool
 	active				bool
-	publicAccess		bool
-	viewers				map[string]*proxySessionViewer
-	baseURI				string
+	PublicAccess		bool
+	Viewers				map[string]*proxySessionViewer
+	BaseURI				string
 	// when there are new sessions, block forwarding until this is true
 }
 
@@ -55,9 +58,27 @@ type loggerInterface interface {
 // should also include default user option
 
 
+func makeNewProxy() *proxyContext {
+	return &proxyContext{
+		log: log.Default(),
+		Users: map[string]*proxyUser{},
+		userSessions: map[string]map[string]*sessionContext{},
+		allSessions: map[string]*sessionContext{},
+		Viewers: map[string]*proxySessionViewer{},
+		DefaultRemotePort: 22,
+		DefaultRemoteIP: "127.0.0.1",
+		ListenIP: "0.0.0.0",
+		ListenPort: 2222,
+		SessionFolder: "html/sessions",
+		WebListenPort: 8080,
+		ServerVersion: "SSH-2.0-OpenSSH_7.9p1 Raspbian-10",
+		PublicAccess:true,
+	}
+}
+
 func (proxy *proxyContext) startProxy() {
 
-	proxy.log.Printf("Starting proxy on socket %v:%v\n", *proxy.listen_ip, *proxy.listen_port)
+	proxy.log.Printf("Starting proxy on socket %v:%v\n", proxy.ListenIP, proxy.ListenPort)
 	config := &ssh.ServerConfig{
 	NoClientAuth: false,
 	MaxAuthTries: 3,
@@ -98,18 +119,19 @@ func (proxy *proxyContext) startProxy() {
 		curSession.mutex.Unlock()
 		return nil, nil
 	},
-	ServerVersion: *proxy.server_version,
+	ServerVersion: proxy.ServerVersion,
 	BannerCallback: func(conn ssh.ConnMetadata) string {
 		return "bannerCallback"
 	},
 	}
 	config.AddHostKey(proxy.private_key)
-
-	listener, err := net.Listen("tcp",  *proxy.listen_ip +":"+strconv.Itoa(*proxy.listen_port))
+	proxy.running = true
+	listener, err := net.Listen("tcp",  proxy.ListenIP +":"+strconv.Itoa(proxy.ListenPort))
 	if err != nil {
 		panic(err)
 	}
-	for {
+	proxy.listener = listener
+	for proxy.running {
 		conn, err := listener.Accept()
 		if err != nil {
 			continue
@@ -137,6 +159,14 @@ func (proxy *proxyContext) startProxy() {
 	}
 }
 
+func (proxy *proxyContext) Stop() {
+	proxy.running = false
+	proxy.listener.Close()
+	for _, value := range proxy.allSessions { 
+		value.end()
+	}
+}
+
 func (proxy *proxyContext) addSessionToUserList(session *sessionContext) {
 	user := session.user.getKey()
 	if  _, ok := proxy.userSessions[user]; !ok {
@@ -156,7 +186,7 @@ func (proxy *proxyContext) deactivate() {
 
 func (proxy *proxyContext) addSessionToSessionList(session * sessionContext) {
 	filename := SESSION_LIST_FN
-	fd, err := os.OpenFile(*proxy.session_folder + "/" + filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	fd, err := os.OpenFile(proxy.SessionFolder + "/" + filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		proxy.log.Println("error opening session list file:", err)
 	}
@@ -213,8 +243,8 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 	}
 
 	// override password if it is provided
-	if proxy.override_password != "" {
-		default_user.RemotePassword = proxy.override_password
+	if proxy.OverridePassword != "" {
+		default_user.RemotePassword = proxy.OverridePassword
 	}
 	// override user if it is provided
 	if proxy.override_user != "" {
@@ -238,7 +268,7 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 }
 
 func (proxy *proxyContext) getDefaultRemoteHost() string {
-	return *proxy.server_ssh_ip +":"+strconv.Itoa(*proxy.server_ssh_port)
+	return proxy.DefaultRemoteIP +":"+strconv.Itoa(proxy.DefaultRemotePort)
 }
 
 func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_channels <-chan ssh.NewChannel, client_requests <-chan *ssh.Request, curSession *sessionContext) {
@@ -357,7 +387,7 @@ func (proxy *proxyContext) makeSessionViewerForUser(user_key string) (error, *pr
 	if user != nil {
 		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST)
 		viewer.proxy = proxy
-		viewer.user = user
+		viewer.User = user
 		proxy.addSessionViewer(viewer)
 		return err, viewer
 	} 
@@ -371,8 +401,8 @@ func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session 
 	if user != nil {
 		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST)
 		viewer.proxy = proxy
-		viewer.user = user
-		viewer.sessionKey = session
+		viewer.User = user
+		viewer.SessionKey = session
 		proxy.addSessionViewer(viewer)
 		return viewer
 	} else {
@@ -382,20 +412,20 @@ func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session 
 
 
 func (proxy *proxyContext) addSessionViewer(viewer *proxySessionViewer) {
-	key := viewer.secret
-	proxy.viewers[key] = viewer
+	key := viewer.Secret
+	proxy.Viewers[key] = viewer
 }
 
 func (proxy *proxyContext) removeSessionViewer(key string) {
-	if _, ok := proxy.viewers[key]; ok {
-		delete(proxy.viewers, key)
+	if _, ok := proxy.Viewers[key]; ok {
+		delete(proxy.Viewers, key)
 	}
 }
 
 
 func (proxy *proxyContext) getSessionViewer(key string) *proxySessionViewer {
 	proxy.log.Printf("key is:%v\n",key)
-	if  val, ok := proxy.viewers[key]; ok {
+	if  val, ok := proxy.Viewers[key]; ok {
 		if val.isExpired() {
 			proxy.removeSessionViewer(key)
 		} else {

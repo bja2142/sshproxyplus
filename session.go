@@ -311,6 +311,8 @@ func (session * sessionContext) end() {
 	session.signalSessionEnd()
 	session.finalizeLog()
 	session.proxy.addSessionToSessionList(session)
+	conn := *session.remote_conn
+	conn.Close()
 }
 
 func (session * sessionContext) markThreadStopped() {
@@ -329,7 +331,7 @@ func (session * sessionContext) infoAsJSON() string {
 		Stop_time: 		session.stop_time.Unix(),
 		Length:			int64(session.stop_time.Sub(session.start_time).Seconds()),
 		Client_host:	session.client_host,
-		Serv_host:		*session.proxy.server_ssh_ip +":"+strconv.Itoa(*session.proxy.server_ssh_port),
+		Serv_host:		session.proxy.DefaultRemoteIP +":"+strconv.Itoa(session.proxy.DefaultRemotePort),
 		Username:		session.client_username,
 		Password: 		session.client_password,
 		Term_rows:		session.term_rows,
@@ -355,7 +357,7 @@ func (session * sessionContext) getTimeOffset() int64 {
 
 
 func (session * sessionContext) initializeLog()  {
-	f, err := os.OpenFile(*session.proxy.session_folder + "/" + session.filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(session.proxy.SessionFolder + "/" + session.filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		session.proxy.log.Println("error opening session log file:", err)
 	}
@@ -380,7 +382,7 @@ func (session * sessionContext) finalizeLog()  {
 		session.proxy.log.Println("error closing log file:", err)
 	}
 	if(len(session.events)<10) {
-		old_file := *session.proxy.session_folder + "/" + session.filename
+		old_file := session.proxy.SessionFolder + "/" + session.filename
 		new_file := old_file + ".scan"
 		err := os.Rename(old_file,new_file)
 		if err != nil {
