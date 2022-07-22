@@ -2,17 +2,8 @@ package main
 
 
 import (
-	"net"
-	"sync"
-	"fmt"
-	"bufio"
+
 )
-
-const PROXY_CONTROLLER_SOCKET_PLAIN				uint16 = 0
-const PROXY_CONTROLLER_SOCKET_PLAIN_WEBSOCKET 	uint16 = 1
-const PROXY_CONTROLLER_SOCKET_TLS				uint16 = 2
-const PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET		uint16 = 3
-
 
 type proxyController struct {
 	proxies			map[uint64]*proxyContext
@@ -21,137 +12,42 @@ type proxyController struct {
 	socketType		uint16
 	socketHost		string
 	socket			proxyControllerSocket
-}
-
-type proxyControllerSocketPlain struct {
-	listener net.Listener
-	active	bool
-	clients []net.Conn
-	clientMutex sync.Mutex
-}
-
-type proxyControllerSocketPlainClient struct {
-	net.Conn
-}
-
-func (client *proxyControllerSocketPlainClient) 	SendLine(data []byte) error {
-	_, err := client.Write(data)
-	if(err != nil)	{
-		fmt.Println("Error writing to plain socket: ", err.Error())
-	}
-	return err
-}
-
-func (client *proxyControllerSocketPlainClient) 	ReadLine() ([]byte, error) {
-	reader := bufio.NewReader(client)
-	return reader.ReadBytes('\n')
-} 
-
-
-
-func (socket *proxyControllerSocketPlain) ListenAndServe(host string, handler proxyControllerSocketHandler) error {
-	var err error
-	socket.listener, err = net.Listen("tcp", host)
-	socket.active = true
-	if (err != nil)	{
-		fmt.Println("Error creating plaint TCP socket:",err.Error())
-		return err
-	}
-	defer socket.Stop()
-
-	for socket.active {
-		client, err := socket.listener.Accept()
-		if err != nil {
-				fmt.Println("Error accepting: ", err.Error())
-				break;
-		} else {
-			socket.clientMutex.Lock()
-				socket.clients = append(socket.clients, client)
-			socket.clientMutex.Unlock()
-			go func(client net.Conn, socket *proxyControllerSocketPlain) {
-				defer socket.clientClose(client)
-				handler(&proxyControllerSocketPlainClient{client},socket)	
-			}(client,socket)
-			
-		}
-	}
-	return nil
-}
-
-func (socket *proxyControllerSocketPlain) clientClose(client net.Conn) {
-	socket.clientMutex.Lock()
-		for index, curClient := range socket.clients {
-			if curClient == client {
-				if(len(socket.clients) > index+1) {
-					socket.clients = append(socket.clients[:index], socket.clients[index+1:]...)
-				} else {
-					socket.clients = socket.clients[:index]
-				}
-				client.Close();
-				break;
-			}
-		}
-	socket.clientMutex.Unlock()
-}
-
-func (socket *proxyControllerSocketPlain) Stop() {
-	if(socket.active) {
-		socket.active = false
-		socket.clientMutex.Lock()
-			for _, client := range socket.clients {
-				client.Close();
-			}
-			socket.clients = make([]net.Conn,0)
-		socket.clientMutex.Unlock()
-	}
-}
-/*
-type proxyControllerSocketTLS struct {
-	receiveHandler 	proxyControllerSocketHandler
-	TLSCert		   	string
 	TLSKey			string
-}
-type proxyControllerSocketWeb struct {
-	receiveHandler *func
-}
-type proxyControllerSocketWebTLS struct {
-	receiveHandler *func
-	TLSCert		   	string
-	TLSKey			string
-}*/
-
-
-type proxyControllerSocketHandler func(proxyControllerSocketClient, proxyControllerSocket)
-
-type proxyControllerSocketClient interface {
-	SendLine(data []byte) error
-	ReadLine() ([]byte, error)
+	TLSCert			string
 }
 
-type proxyControllerSocket interface {
-	ListenAndServe(host string, handler proxyControllerSocketHandler) error
-	Stop()
-}
-
+const PROXY_CONTROLLER_SOCKET_PLAIN				uint16 = 0
+const PROXY_CONTROLLER_SOCKET_PLAIN_WEBSOCKET 	uint16 = 1
+const PROXY_CONTROLLER_SOCKET_TLS				uint16 = 2
+const PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET		uint16 = 3
 
 
 
 func (controller *proxyController) clientHandler(client proxyControllerSocketClient, socket proxyControllerSocket) {
 	for {
-		data, _ := client.ReadLine()
-		client.SendLine(data)
+		data, err := client.ReadLine()
+		if (err != nil) {
+			break;
+		}
+		err = client.SendLine(data)
+		if (err != nil) {
+			break;
+		}
 	}
 }
 
 func (controller *proxyController) listen() {
 	switch controller.socketType {
 	case PROXY_CONTROLLER_SOCKET_PLAIN:
-		controller.socket = &proxyControllerSocketPlain{}
+		controller.socket = &proxyControllerSocketTCP{plaintext: true}
 	case PROXY_CONTROLLER_SOCKET_PLAIN_WEBSOCKET:
+		controller.socket = &proxyControllerSocketWeb{plaintext: true}
 
 	case PROXY_CONTROLLER_SOCKET_TLS:
+		controller.socket = &proxyControllerSocketTCP{TLSCert: controller.TLSCert, TLSKey: controller.TLSKey}
 
 	case PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET:
+		controller.socket = &proxyControllerSocketWeb{TLSCert: controller.TLSCert, TLSKey: controller.TLSKey}
 
 	}
 	controller.socket.ListenAndServe(controller.socketHost, controller.clientHandler)
