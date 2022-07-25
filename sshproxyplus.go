@@ -79,7 +79,7 @@ func main() {
 			controller.activateProxy(proxyID)
 			Logger.Println("activating")
 		}  else if input == "d" {
-			ccontroller.deactivateProxy(proxyID)
+			controller.deactivateProxy(proxyID)
 			Logger.Println("deactivating")
 			
 		} else if input == "k" {

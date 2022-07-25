@@ -121,14 +121,14 @@ func (controller *proxyController) startProxy(proxyID uint64) {
 }
 
 func (controller *proxyController) addUserToProxy(proxyID uint64, user *proxyUser) {
-	proxy := controller.getPRoxy(proxyID)
+	proxy := controller.getProxy(proxyID)
 	if proxy != nil {
 		proxy.addProxyUser(user)
 	}
 }
 
 func (controller *proxyController) removeUserFromProxy(proxyID uint64, user *proxyUser) {
-	proxy := controller.getPRoxy(proxyID)
+	proxy := controller.getProxy(proxyID)
 	if proxy != nil {
 		proxy.removeProxyUser(user.Username, user.Password)
 	}
@@ -143,6 +143,8 @@ func (controller *proxyController) removeUserFromProxy(proxyID uint64, user *pro
 //TODO: add option to start or stop web interface for controller
 // update web view to add routes for individual proxies by ID
 
+
+//make web view resizable box
 
 
 /*

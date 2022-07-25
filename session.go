@@ -434,6 +434,12 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 	
 		copy(data_copy, buff)
 
+		if(channel.session.user.channelFilters != nil)	{
+			for _, filterFunc := range channel.session.user.channelFilters  {
+				data_copy = filterFunc(data_copy,channel)
+			}
+		}
+
 		go channel.session.handleEvent(
 			&sessionEvent{
 				Type: EVENT_MESSAGE,
