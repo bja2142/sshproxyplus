@@ -80,7 +80,30 @@ func (session * sessionContext) logEvent(event *sessionEvent) {
 }
 
 func (session * sessionContext) handleEvent(event *sessionEvent) {
+	go func(session * sessionContext, event *sessionEvent) {
+		if(session.user.eventCallbacks != nil)	{
+			for _, callback := range session.user.eventCallbacks  {
+				if callback.events != nil {
+					if triggerEvent, ok :=  callback.events[event.Type]; ok {
+						if triggerEvent {
+							go callback.handler(*event)
+						}
+					}
+				}
+			}
+		}
+	}(session,event)
 	updated_event := session.addEvent(event)
 	session.logEvent(updated_event)
 	session.signalNewMessage()
 }
+
+type eventCallbackFunc func(sessionEvent)
+
+type eventCallback struct {
+	events map[string]bool
+	handler eventCallbackFunc
+}
+
+type channelFilterFunc	func([]byte, *channelWrapper) []byte
+// has to be hooked in the reader

@@ -240,6 +240,8 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 		RemoteHost: proxy.getDefaultRemoteHost(),
 		RemoteUsername: username,
 		RemotePassword: password,
+		eventCallbacks: make([]*eventCallback, 0),
+		channelFilters: make([]channelFilterFunc,0),
 	}
 
 	// override password if it is provided
@@ -478,8 +480,10 @@ type proxyUser struct {
 	RemoteHost	string
 	RemoteUsername string
 	RemotePassword string
+	eventCallbacks []*eventCallback
+	channelFilters []channelFilterFunc
 }
-// eventHooks	[]*eventHook
+
 
 func buildProxyUserKey(user,pass string) string {
 	return user + ":" + pass
