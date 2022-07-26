@@ -436,7 +436,7 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 
 		if(channel.session.user.channelFilters != nil)	{
 			for _, filterFunc := range channel.session.user.channelFilters  {
-				data_copy = filterFunc(data_copy,channel)
+				data_copy = filterFunc.fn(data_copy,channel)
 			}
 		}
 

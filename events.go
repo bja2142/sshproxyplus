@@ -105,5 +105,7 @@ type eventCallback struct {
 	handler eventCallbackFunc
 }
 
-type channelFilterFunc	func([]byte, *channelWrapper) []byte
+type channelFilterFunc	struct {
+	fn func([]byte, *channelWrapper) []byte
+}
 // has to be hooked in the reader

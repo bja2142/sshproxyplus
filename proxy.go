@@ -241,7 +241,7 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 		RemoteUsername: username,
 		RemotePassword: password,
 		eventCallbacks: make([]*eventCallback, 0),
-		channelFilters: make([]channelFilterFunc,0),
+		channelFilters: make([]*channelFilterFunc,0),
 	}
 
 	// override password if it is provided
@@ -481,7 +481,7 @@ type proxyUser struct {
 	RemoteUsername string
 	RemotePassword string
 	eventCallbacks []*eventCallback
-	channelFilters []channelFilterFunc
+	channelFilters []*channelFilterFunc
 }
 
 
@@ -491,6 +491,42 @@ func buildProxyUserKey(user,pass string) string {
 
 func (user *proxyUser) getKey() string {
 	return buildProxyUserKey(user.Username, "")
+}
+
+func (user *proxyUser) addEventCallback(callback *eventCallback) {
+	if user.eventCallbacks == nil {
+		user.eventCallbacks = make([]*eventCallback,0)
+	}
+	user.eventCallbacks = append(user.eventCallbacks, callback)
+}
+
+func (user *proxyUser) removeEventCallback(callback *eventCallback) {
+	if user.eventCallbacks != nil {
+		for index, value := range user.eventCallbacks {
+			if value == callback {
+				user.eventCallbacks[index] = user.eventCallbacks[len(user.eventCallbacks)-1]
+				user.eventCallbacks = user.eventCallbacks[:len(user.eventCallbacks)-1]
+			}
+		}
+	}
+}
+
+func (user *proxyUser) addChannelFilter(function *channelFilterFunc) {
+	if user.channelFilters == nil {
+		user.channelFilters = make([]*channelFilterFunc,0)
+	}
+	user.channelFilters = append(user.channelFilters, function)
+}
+
+func (user *proxyUser) removeChannelFilter(function *channelFilterFunc) {
+	if user.channelFilters != nil {
+		for index, value := range user.channelFilters {
+			if value == function {
+				user.channelFilters[index] = user.channelFilters[len(user.channelFilters)-1]
+				user.channelFilters = user.channelFilters[:len(user.channelFilters)-1]
+			}
+		}
+	}
 }
 
 

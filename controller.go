@@ -3,6 +3,9 @@ package main
 
 import (
 	"sync"
+	"net/http"
+	"strconv"
+	"log"
 )
 
 type proxyController struct {
@@ -15,6 +18,11 @@ type proxyController struct {
 	TLSKey			string
 	TLSCert			string
 	mutex			sync.Mutex
+	webServer		*http.Server
+	WebHost			string
+	WebStaticDir	string
+	BaseURI			string
+	log				loggerInterface
 }
 
 
@@ -42,7 +50,71 @@ func (controller *proxyController) clientHandler(client proxyControllerSocketCli
 	}
 }
 
+
+// if performance is an issue, don't need to make a new handler every time.
+// reuse after first go.
+func (controller *proxyController) handleWebProxyRequest(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	numericID,err := strconv.ParseUint(id, 10, 64)
+	controller.log.Printf("Got websocket request for proxy with id: %v\n",numericID)
+	if err == nil {
+		proxy := controller.getProxy(numericID)
+		if proxy != nil {
+			proxyWebHandler := &proxyWebServer{
+				proxy:proxy,
+				BaseURI: controller.BaseURI,
+			}
+			controller.log.Printf("handling")
+			proxyWebHandler.socketHandler(w,r)
+		}
+	}
+}
+
+func (controller *proxyController) startWebServer() error {
+	controller.initializeLogger()
+	if controller.webServer == nil {
+		serverMux := http.NewServeMux()
+		fileServe := http.FileServer(http.Dir(controller.WebStaticDir))
+
+		serverMux.Handle("/",fileServe)
+		serverMux.HandleFunc("/proxysocket/", controller.handleWebProxyRequest)
+		controller.webServer = &http.Server{
+			Handler: serverMux,
+			Addr:	controller.WebHost,
+		}
+	}
+	var err error
+	if controller.socket.IsPlaintext() {
+		controller.log.Printf("Starting plaintext web server: %v\n",controller.WebHost)
+		err = controller.webServer.ListenAndServe()
+	} else {
+		controller.log.Printf("Starting TLS web server: %v\n",controller.WebHost)
+		err = controller.webServer.ListenAndServeTLS(controller.TLSCert, controller.TLSKey)
+	}
+
+	if (err != nil)	{
+		controller.log.Println("Error creating web server:",err.Error())
+		return err
+	} 
+	return nil
+}
+
+func (controller *proxyController) stopWebServer() {
+	if controller.webServer != nil {
+		controller.webServer.Close()
+		controller.webServer = nil
+	}
+}
+
+func (controller *proxyController) initializeLogger() {
+	if nil == controller.log {
+		controller.log = log.Default()
+	}
+}
+
+
 func (controller *proxyController) listen() {
+	controller.initializeLogger()
 	switch controller.SocketType {
 	case PROXY_CONTROLLER_SOCKET_PLAIN:
 		controller.socket = &proxyControllerSocketTCP{plaintext: true}
@@ -71,6 +143,7 @@ func (controller *proxyController) getNextProxyID() uint64 {
 func (controller *proxyController) createProxy() uint64 {
 	proxy_id := controller.getNextProxyID()
 	controller.Proxies[proxy_id] = makeNewProxy()
+	controller.Proxies[proxy_id].log = controller.log
 	return proxy_id
 } 
 
@@ -134,17 +207,47 @@ func (controller *proxyController) removeUserFromProxy(proxyID uint64, user *pro
 	}
 }
 
+func (controller *proxyController) addEventCallbackToUser(proxyID uint64, user *proxyUser, callback *eventCallback) {
+	proxy := controller.getProxy(proxyID)
+	if proxy != nil {
+		err, user, _ := proxy.getProxyUser(user.Username,user.Password)
+		if (err != nil) {
+			user.addEventCallback(callback)
+		}
+	}
+}
 
-// add event callback
+func (controller *proxyController) removeEventCallbackFromUser(proxyID uint64, user *proxyUser, callback *eventCallback) {
+	proxy := controller.getProxy(proxyID)
+	if proxy != nil {
+		err, user, _ := proxy.getProxyUser(user.Username,user.Password)
+		if (err != nil) {
+			user.removeEventCallback(callback)
+		}
+	}
+}
 
-// add event filter
 
+func (controller *proxyController) addChannelFilterToUser(proxyID uint64, user *proxyUser, function *channelFilterFunc) {
+	proxy := controller.getProxy(proxyID)
+	if proxy != nil {
+		err, user, _ := proxy.getProxyUser(user.Username,user.Password)
+		if (err != nil) {
+			user.addChannelFilter(function)
+		}
+	}
+}
 
-//TODO: add option to start or stop web interface for controller
-// update web view to add routes for individual proxies by ID
+func (controller *proxyController) removeChannelFilterFromUser(proxyID uint64, user *proxyUser, function *channelFilterFunc) {
+	proxy := controller.getProxy(proxyID)
+	if proxy != nil {
+		err, user, _ := proxy.getProxyUser(user.Username,user.Password)
+		if (err != nil) {
+			user.removeChannelFilter(function)
+		}
+	}
+}
 
-
-//make web view resizable box
 
 
 /*

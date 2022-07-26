@@ -116,6 +116,11 @@ func (socket *proxyControllerSocketTCP) Stop() {
 	}
 }
 
+func (socket *proxyControllerSocketTCP) IsPlaintext() bool {
+	return socket.plaintext
+}
+
+
 type proxyControllerSocketWeb struct {
 	TLSCert		   	string
 	TLSKey			string
@@ -199,6 +204,10 @@ func (socket *proxyControllerSocketWeb) Stop() {
 	}
 }
 
+func (socket *proxyControllerSocketWeb) IsPlaintext() bool {
+	return socket.plaintext
+}
+
 
 type proxyControllerSocketHandler func(proxyControllerSocketClient, proxyControllerSocket)
 
@@ -210,5 +219,6 @@ type proxyControllerSocketClient interface {
 type proxyControllerSocket interface {
 	ListenAndServe(host string, handler proxyControllerSocketHandler) error
 	Stop()
+	IsPlaintext() bool
 }
 
