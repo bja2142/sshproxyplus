@@ -17,7 +17,7 @@ import (
 	"flag"
 	"log"
 	"os"
-	"strconv"
+	//"strconv"
 	"io/ioutil"
 	"errors"
 	"golang.org/x/crypto/ssh"
@@ -52,6 +52,9 @@ func main() {
 		TLSKey: "TLSKeys/server.key",
 		TLSCert: "TLSKeys/server.crt",
 		Proxies: make(map[uint64]*proxyContext),
+		WebHost: "0.0.0.0:8000",
+		WebStaticDir: "./html",
+		log: Logger,
 	}
 
 	go controller.listen()
@@ -61,14 +64,17 @@ func main() {
 
 	proxyID := controller.addExistingProxy(cur_proxy)
 
-	go controller.startProxy(proxyID)
+	controller.log.Printf("Proxy has id:%v\n",proxyID)
 
-	webServer := &proxyWebServer{
+	go controller.startProxy(proxyID)
+	go controller.startWebServer()
+
+	/*webServer := &proxyWebServer{
 		proxy: cur_proxy, 
 		listenHost: "0.0.0.0:"+strconv.Itoa(cur_proxy.WebListenPort),
 	}
 
-	go webServer.ServeWebSocketSessionServer()
+	go webServer.ServeWebSocketSessionServer()*/
 
 	var input string
 	for {

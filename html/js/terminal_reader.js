@@ -67,6 +67,7 @@ class TerminalReader {
     #terminal_buffer = ""
     #keystroke_buffer = ""
     #session_slider 
+    #ignore_resize = false
 
     #statusbar
     #terminal_element
@@ -92,16 +93,25 @@ class TerminalReader {
         this.build_reader()
         this.initialize_terminal()
     }
+    get ignore_resize()
+    {
+        return this.#ignore_resize 
+    }
+    
+    allow_resize()
+    {
+        this.#ignore_resize = false
+    }
+
+    disable_resize()
+    {
+        this.#ignore_resize = true
+    }
 
     build_media_buttons()
     {
         var cur_media_reader = this
         var media_buttons = jQuery('<div></div>').addClass("media_buttons")
-        
-        
-
-
-
 
 
         return media_buttons
@@ -130,6 +140,12 @@ class TerminalReader {
 
         this.#terminal_element = jQuery('<div></div>')
         this.terminal_element.attr("id",this.terminal_id)
+        this.terminal_element.resizable({
+            ghost: false,
+            resize: function( event, ui ) {
+                self.resize_by_pixels(ui.size.width,ui.size.height);
+            }
+          })
         this.terminal_element.addClass("terminal-box")
         this.reader_element.append(this.terminal_element)
 
@@ -343,17 +359,23 @@ class TerminalReader {
 
     resize_by_pixels(width,height)
     {
+        height = Math.min(height, max_terminal_height())
+        width = Math.min(width, max_terminal_width())
         var new_height = height+ "px";
         var new_width = width + "px";
         this.reader_element.css("width", new_width)
         this.terminal_element.css("width", new_width)
         this.terminal_element.css("height", new_height)
-        this.#fit_addon.fit()
+        this.fit_terminal()
         ////console.log("new dimensions",new_height,new_width)
     }
 
     resize(rows,cols)
     {
+        if(this.ignore_resize)
+        {
+            return
+        }
         var new_height = parseInt(rows*this.terminal_row_height + 1)
         var new_width = parseInt(cols*this.terminal_col_width + 1)
         this.resize_by_pixels(new_width,new_height)
@@ -383,7 +405,9 @@ class TerminalReader {
         this.terminal.reset()
         this.keystrokes.empty()
         this.clear_events()
-        this.resize_by_pixels(this.initial_width,this.initial_height)
+        if(! this.ignore_resize){
+            this.resize_by_pixels(this.initial_width,this.initial_height)
+        }
         this.clear_buffers()
     }
 

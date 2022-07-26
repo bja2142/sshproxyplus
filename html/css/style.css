@@ -46,7 +46,7 @@ a.selected:visited
     width:800px;
     margin:0px auto;
     text-align:center;
-    min-width:800px;
+    min-width:400px;
     justify-content: center;
     align-items: center;
     display:flex;
@@ -58,7 +58,7 @@ a.selected:visited
 .terminal_reader div.terminal-box
 {
     display:inline-block;
-    height:300px;
+    height:50px;
     width:100%;
     margin:0px;
     padding:0px;
@@ -66,7 +66,7 @@ a.selected:visited
 .terminal_reader h4.statusbar
 {
     display:inline-block;
-    min-width:790px;
+    min-width:390px;
     width:100%;
     text-align:left;
     margin:0px;
@@ -97,7 +97,7 @@ a.selected:visited
 }*/
 .terminal_reader .keystrokes 
 {
-    min-width:800px;
+    min-width:400px;
     width:100%;
     height:100px;
     color: #cfc;

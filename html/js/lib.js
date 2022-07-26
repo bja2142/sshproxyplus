@@ -30,8 +30,40 @@ function build_sock_addr()
     return addr
 }
 
+// https://html-online.com/articles/get-url-parameters-javascript/
+function getURLVars() {
+    var vars = {};
+    var parts = window.location.href.replace(/[?&]+([^=&#]+)=([^&#]*)/gi, function(m,key,value) {
+        vars[key] = value;
+    });
+    return vars;
+}
+
+function build_proxy_socket_url()
+{
+    GETVars = getURLVars()
+    if (GETVars["id"] != undefined)
+    {
+        proxyID = GETVars["id"]
+    } else {
+        proxyID = 0
+    }
+    var url = build_sock_addr()+ "/proxysocket/?id="+proxyID
+    //console.log(url)
+    return url
+}
+
+function max_terminal_width() {
+    return jQuery(window).width()-10
+}
+
+function max_terminal_height() {
+    return jQuery(window).height()-160
+}
+
+
 function init_query_socket() {
-    let socket = new WebSocket(build_sock_addr()+"/socket")
+    let socket = new WebSocket(build_proxy_socket_url())
     var this_timer = -1
     socket.onmessage = (event) => {
         try {
@@ -81,7 +113,7 @@ function get_viewer_session_from_socket(session)
 function run_session_from_socket(session,viewer_mode)
 {
     //console.log("getting session",session)
-    let socket = new WebSocket(build_sock_addr()+"/socket")
+    let socket = new WebSocket( build_proxy_socket_url())
     socket.onopen = function() {
         if(session.active) {
             terminal_reader.set_session_mode_live()
@@ -233,7 +265,7 @@ function list_session(viewer_key, auto_play_item, session_key, use_viewer)
 {
     var this_timer = -1
     
-    let socket = new WebSocket(build_sock_addr()+"/socket")
+    let socket = new WebSocket( build_proxy_socket_url())
     socket.onmessage = (event) => {
     
         console.log(event)
