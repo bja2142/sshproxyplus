@@ -17,7 +17,7 @@ import (
 	"flag"
 	"log"
 	"os"
-	//"strconv"
+	"strconv"
 	"io/ioutil"
 	"errors"
 	"golang.org/x/crypto/ssh"
@@ -46,13 +46,13 @@ func main() {
 
 
 	controller := proxyController{
-		SocketType: PROXY_CONTROLLER_SOCKET_PLAIN,
+		SocketType: PROXY_CONTROLLER_SOCKET_TLS,
 		SocketHost: "0.0.0.0:9999",
 		PresharedKey: "key",
-		TLSKey: "TLSKeys/server.key",
-		TLSCert: "TLSKeys/server.crt",
+		TLSKey: cur_proxy.TLSKey,
+		TLSCert: cur_proxy.TLSCert,
 		Proxies: make(map[uint64]*proxyContext),
-		WebHost: "0.0.0.0:8000",
+		WebHost: "0.0.0.0:"+strconv.Itoa(cur_proxy.WebListenPort),
 		WebStaticDir: "./html",
 		log: Logger,
 	}
