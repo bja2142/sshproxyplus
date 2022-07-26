@@ -125,7 +125,7 @@ func (controller *proxyController) listen() {
 	case PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET:
 		controller.socket = &proxyControllerSocketWeb{TLSCert: controller.TLSCert, TLSKey: controller.TLSKey}
 	}
-	controller.socket.ListenAndServe(controller.SocketHost, controller.clientHandler)
+	go controller.socket.ListenAndServe(controller.SocketHost, controller.clientHandler)
 }
 
 func (controller *proxyController) Stop() {

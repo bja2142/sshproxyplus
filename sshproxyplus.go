@@ -57,7 +57,7 @@ func main() {
 		log: Logger,
 	}
 
-	go controller.listen()
+	controller.listen()
 
 
 	defer controller.Stop()
@@ -152,8 +152,8 @@ func parseArgsForNewProxyContext() *proxyContext {
 	proxy_key   := flag.String("lkey", "autogen", "private key for proxy to use; defaults to autogen new key")
 	log_file := flag.String("log", "-", "file to log to; defaults to stdout")
 	SessionFolder := flag.String("sess-dir", ".", "directory to write sessions to and to read from; defaults to the current directory")
-	TLSCert := flag.String("TLSCert", ".", "TLS certificate to use for web; defaults to plaintext")
-	TLSKey := flag.String("TLSKey", ".", "TLS key to use for web; defaults to plaintext")
+	TLSCert := flag.String("tls_cert", ".", "TLS certificate to use for web; defaults to plaintext")
+	TLSKey := flag.String("lts_key", ".", "TLS key to use for web; defaults to plaintext")
 	override_user := flag.String("override-user", "", "Override client-supplied username when proxying to remote server; this field is only used if the the (Users proxyUser) field is empty")
 	OverridePassword := flag.String("override-pass","","Overrides client-supplied password when proxying to remote server; this field is only used if the the (Users proxyUser) field is empty")
 	require_valid_password := flag.Bool("require-valid-password",false, "requires a valid password to authenticate; if this field is false then the presented credentials will be passed to the port and server provided in dport and dip; this field is ignored if (Users proxy) field is not empty")
