@@ -25,15 +25,17 @@ type proxySessionViewer struct {
 	expiration int64
 }
 
-func (viewer *proxySessionViewer) buildSignedURL() string {
-	return fmt.Sprintf("%v/#signed-viewer&%v",viewer.proxy.BaseURI,viewer.Secret)
+func (viewer *proxySessionViewer) buildSignedURL(proxyID uint64) string {
+	return fmt.Sprintf("%v/?id=%v#signed-viewer&%v", viewer.proxy.BaseURI,proxyID,viewer.Secret)
 }
 
-func createNewSessionViewer(ViewerType int) *proxySessionViewer {
+func createNewSessionViewer(ViewerType int, proxy *proxyContext, user *proxyUser) *proxySessionViewer {
 	viewer := &proxySessionViewer{}
 	var err error
 	viewer.ViewerType = ViewerType
 	viewer.Secret, err = GenerateRandomString(SESSION_VIEWER_SECRET_LEN)
+	viewer.User = user
+	viewer.proxy = proxy
 
 	viewer.expiration = SESSION_VIEWER_EXPIRATION
 	if err != nil {
@@ -66,6 +68,7 @@ func (viewer *proxySessionViewer) getSessions() (map[string]*sessionContext, []s
 			return viewer.proxy.userSessions[user_key], viewer.proxy.ListAllUserSessions(user_key)
 		}
 	} else {
+		//viewer.proxy.log.Println("could not find user_key in user session", user_key, viewer.proxy.userSessions)
 		return make(map[string]*sessionContext), session_keys
 	}
 }

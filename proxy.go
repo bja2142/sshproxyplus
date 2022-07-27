@@ -9,6 +9,7 @@ import (
 	"os"
 	"errors"
 	"log"
+	"encoding/json"
 )
 
 const SESSION_LIST_FN	string = ".session_list"
@@ -33,7 +34,7 @@ type proxyContext struct {
 	TLSCert				string
 	TLSKey				string
 	OverridePassword	string
-	override_user		string
+	OverrideUser		string
 	WebListenPort		int
 	ServerVersion		string
 	Users 				map[string]*proxyUser
@@ -58,7 +59,7 @@ type loggerInterface interface {
 // should also include default user option
 
 
-func makeNewProxy() *proxyContext {
+func makeNewProxy(signer ssh.Signer) *proxyContext {
 	return &proxyContext{
 		log: log.Default(),
 		Users: map[string]*proxyUser{},
@@ -73,6 +74,7 @@ func makeNewProxy() *proxyContext {
 		WebListenPort: 8080,
 		ServerVersion: "SSH-2.0-OpenSSH_7.9p1 Raspbian-10",
 		PublicAccess:true,
+		private_key: signer,
 	}
 }
 
@@ -136,7 +138,6 @@ func (proxy *proxyContext) startProxy() {
 		if err != nil {
 			continue
 		}
-
 		sess_key := conn.LocalAddr().String()+":"+conn.RemoteAddr().String()
 		// if a client reuses socket ports, let's preserve the old session
 		// they shouldn't be able to do this concurrently because of how TCP works.
@@ -153,6 +154,7 @@ func (proxy *proxyContext) startProxy() {
 		if err != nil {
 			continue
 		}
+		
 		//go ssh.DiscardRequests(reqs)
 		// maybe we *can* discard requests?
 		go proxy.handleClientConn(ssh_conn, channels, reqs, proxy.allSessions[sess_key])
@@ -249,15 +251,19 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 		default_user.RemotePassword = proxy.OverridePassword
 	}
 	// override user if it is provided
-	if proxy.override_user != "" {
-		default_user.RemoteUsername = proxy.override_user
+	if proxy.OverrideUser != "" {
+		default_user.RemoteUsername = proxy.OverrideUser
 	}
 
 	if(len(proxy.Users)>0) {
 		err, user,password_blank := proxy.getProxyUser(username, password)
 		if (err != nil) {
-			//creds are not valid 
-			return err, nil
+			if ! proxy.RequireValidPassword {
+				return nil, default_user
+			} else {
+				return err, nil
+			}
+			
 		} else {
 			if password_blank {
 				proxy.log.Printf("allowing any password for user: %v\n", username)
@@ -271,6 +277,47 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 
 func (proxy *proxyContext) getDefaultRemoteHost() string {
 	return proxy.DefaultRemoteIP +":"+strconv.Itoa(proxy.DefaultRemotePort)
+}
+
+func makeProxyFromJSON(data []byte, signer ssh.Signer) (error, *proxyContext) {
+	var err error
+	proxy := &proxyContext{}
+	err = json.Unmarshal(data, proxy)
+	if err == nil {
+		proxy.initialize(signer)
+	}
+	return err, proxy
+}
+
+func (proxy *proxyContext) initialize(defaultSigner ssh.Signer) {
+	if proxy.Users == nil {
+		proxy.Users = map[string]*proxyUser{}
+	}
+	if proxy.userSessions == nil {
+		proxy.userSessions = map[string]map[string]*sessionContext{}
+	}
+
+	if proxy.allSessions == nil {
+		proxy.allSessions = map[string]*sessionContext{}
+	}
+
+	if proxy.Viewers == nil {
+		proxy.Viewers = map[string]*proxySessionViewer{}
+	}
+
+	if proxy.private_key == nil {
+		proxy.private_key = defaultSigner
+	}
+
+	for _, viewer := range proxy.Viewers {
+		viewer.proxy = proxy
+		if(viewer.User != nil) {
+			err, user, _ := proxy.getProxyUser(viewer.User.Username, viewer.User.Password)
+			if err == nil {
+				viewer.User = user
+			}
+		}
+	}
 }
 
 func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_channels <-chan ssh.NewChannel, client_requests <-chan *ssh.Request, curSession *sessionContext) {
@@ -387,9 +434,7 @@ func (proxy *proxyContext) makeSessionViewerForUser(user_key string) (error, *pr
 	err,user,_ := proxy.getProxyUser(user_key, "")
 
 	if user != nil {
-		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST)
-		viewer.proxy = proxy
-		viewer.User = user
+		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST,proxy, user)
 		proxy.addSessionViewer(viewer)
 		return err, viewer
 	} 
@@ -401,9 +446,7 @@ func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session 
 	_,user,_ := proxy.getProxyUser(user_key, "")
 
 	if user != nil {
-		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST)
-		viewer.proxy = proxy
-		viewer.User = user
+		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST, proxy, user)
 		viewer.SessionKey = session
 		proxy.addSessionViewer(viewer)
 		return viewer
@@ -426,7 +469,6 @@ func (proxy *proxyContext) removeSessionViewer(key string) {
 
 
 func (proxy *proxyContext) getSessionViewer(key string) *proxySessionViewer {
-	proxy.log.Printf("key is:%v\n",key)
 	if  val, ok := proxy.Viewers[key]; ok {
 		if val.isExpired() {
 			proxy.removeSessionViewer(key)
