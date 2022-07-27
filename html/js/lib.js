@@ -253,7 +253,7 @@ function list_viewer_session_and_play_key(viewer_key,session_key)
 
 function list_viewer_session(viewer_key,auto_play_item,session_key)
 {
-    list_session(viewr_key, auto_play_item, session_key, false)
+    list_session(viewer_key, auto_play_item, session_key, true)
 }
 
 function list_and_play_session(session_key)
@@ -305,6 +305,12 @@ function list_session(viewer_key, auto_play_item, session_key, use_viewer)
                 
             }
         } else {
+            for (var index =0; index < data.length; index++)
+            {
+                if(data[index].secret == undefined) {
+                    data[index].secret =viewer_key
+                }
+            }
             add_viewer_session_to_list(data)
         }
     };
@@ -379,8 +385,8 @@ function read_hashes()
     if(window.location.hash != "" && window.location.hash.indexOf("&") != -1)
     {
         hash_elements = window.location.hash.slice(1).split("&")
-        action_type = hash_elements[0]
-        action_key = hash_elements[1]
+        var action_type = hash_elements[0]
+        var action_key = hash_elements[1]
         //console.log(action_type,action_key)
         if(action_type == "live") {
             list_and_play_session(action_key)
