@@ -42,30 +42,7 @@ const PROXY_CONTROLLER_SOCKET_TLS				uint16 = 2
 const PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET		uint16 = 3
 
 
-// TODO: !!! TODO TODO TODO
-// - define message types
-// - integrate HMAC into message protocol
-// - test
 
-/*
-make_new_proxy (json blob)
-start_proxy(id)
-stop_proxy(id)
-destroy_proxy(id)
-activate_proxy(id)
-deactivate_proxy(id)
-list_proxy()
-get_proxy_info(id)
-get_existing_proxy_viewers(id)
-make_new_proxy_viewer(proxy_id,user)
-add_user_to_proxy()
-remove_user_from_proxy(user)
-add_filter_to_user
-add_string_callback_to_user(string,hook_url)
-
-
-
-*/
 
 func (controller *proxyController) clientHandler(client proxyControllerSocketClient, socket proxyControllerSocket) {
 	for {
@@ -73,10 +50,24 @@ func (controller *proxyController) clientHandler(client proxyControllerSocketCli
 		if (err != nil) {
 			break;
 		}
+		messageWrapper :=controllerHMAC{}
+		err = json.Unmarshal(data,&messageWrapper)
+		if(err == nil) {
+			err, message := messageWrapper.verify([]byte(controller.PresharedKey))
+			if (err == nil) {
+				data = message.handleMessage(controller)
+			} else {
+				controller.log.Println("error during verify", err)
+			}
+		}  else {
+			controller.log.Println("error during unmarshal",err)
+		}
+		// echo back commands on error
 		err = client.SendLine(data)
 		if (err != nil) {
 			break;
 		}
+		
 	}
 }
 
@@ -253,11 +244,17 @@ func (controller *proxyController) getNextProxyID() uint64 {
 }
 
 func (controller *proxyController) createProxy() uint64 {
-	proxy_id := controller.getNextProxyID()
-	controller.Proxies[proxy_id] = makeNewProxy(controller.defaultSigner)
-	controller.Proxies[proxy_id].log = controller.log
-	return proxy_id
-} 
+	return controller.addProxy(makeNewProxy(controller.defaultSigner))
+}
+
+func (controller *proxyController) addProxyFromJSON(data []byte) (error,uint64) {
+	err,newProxy := makeProxyFromJSON(data, controller.defaultSigner)
+	var proxyID uint64
+	if (err == nil) {
+		proxyID = controller.addProxy(newProxy)
+	}
+	return err, proxyID
+}
 
 func (controller *proxyController) destroyProxy(proxyID uint64) {
 	controller.mutex.Lock()
@@ -289,6 +286,12 @@ func (controller *proxyController) getProxy(proxyID uint64) (proxy *proxyContext
 		}
 	controller.mutex.Unlock()
 	return proxy
+}
+
+func (controller *proxyController) addProxy(proxy *proxyContext) uint64 {
+	proxy_id := controller.addExistingProxy(proxy)
+	controller.Proxies[proxy_id].log = controller.log
+	return proxy_id
 }
 
 func (controller *proxyController) addExistingProxy(proxy *proxyContext) uint64 {

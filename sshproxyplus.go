@@ -22,6 +22,7 @@ import (
 	"errors"
 	"golang.org/x/crypto/ssh"
 	"net"
+	"encoding/json"
 
 )
 
@@ -101,6 +102,13 @@ func main() {
 			data, _ := controller.exportControllerAsJSON()
 			Logger.Println(string(data))
 			controller.writeControllerConfigToFile("config.json")
+		} else if input == "t" {
+			message := controllerMessage{MessageType: CONTROLLER_MESSAGE_LIST_PROXIES}
+			err, signedMessage := message.sign([]byte(controller.PresharedKey))
+			data, err := json.Marshal(&signedMessage)
+			if (err == nil)	{
+				Logger.Println(string(data))
+			}
 		}
 		fmt.Println("Enter q to quit.")
 		for index, proxy := range controller.Proxies {
