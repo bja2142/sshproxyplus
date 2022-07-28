@@ -221,17 +221,21 @@ func (proxy *proxyContext) getProxyUser(username, password string) (error, *prox
 	}
 }
 
-func (proxy *proxyContext) addProxyUser(user *proxyUser) {
+func (proxy *proxyContext) addProxyUser(user *proxyUser) string {
 	key := buildProxyUserKey(user.Username,user.Password)
 	proxy.Users[key] = user
+	return key
 }
 
-func (proxy *proxyContext) removeProxyUser(username string, password string) {
+func (proxy *proxyContext) removeProxyUser(username string, password string) error {
 	key := buildProxyUserKey(username,password)
+	var err error
 	if _, ok := proxy.Users[key]; ok {
 		delete(proxy.Users, key)
+	} else {
+		err = errors.New("That proxyUser does not exist")
 	}
-	
+	return err
 }
 
 func (proxy *proxyContext) authenticateUser(username,password string) (error, *proxyUser) {
@@ -442,16 +446,16 @@ func (proxy *proxyContext) makeSessionViewerForUser(user_key string) (error, *pr
 }
 
 
-func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session string) *proxySessionViewer {
-	_,user,_ := proxy.getProxyUser(user_key, "")
+func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session string) (error, *proxySessionViewer) {
+	err,user,_ := proxy.getProxyUser(user_key, "")
 
 	if user != nil {
 		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST, proxy, user)
 		viewer.SessionKey = session
 		proxy.addSessionViewer(viewer)
-		return viewer
+		return err, viewer
 	} else {
-		return nil
+		return err, nil
 	}
 }
 
@@ -467,6 +471,13 @@ func (proxy *proxyContext) removeSessionViewer(key string) {
 	}
 }
 
+func (proxy *proxyContext) removeExpiredSessions() {
+	for key, val:= range proxy.Viewers {
+		if val.isExpired() {
+			proxy.removeSessionViewer(key)
+		} 
+	}
+}
 
 func (proxy *proxyContext) getSessionViewer(key string) *proxySessionViewer {
 	if  val, ok := proxy.Viewers[key]; ok {
@@ -535,11 +546,12 @@ func (user *proxyUser) getKey() string {
 	return buildProxyUserKey(user.Username, "")
 }
 
-func (user *proxyUser) addEventCallback(callback *eventCallback) {
+func (user *proxyUser) addEventCallback(callback *eventCallback) int {
 	if user.eventCallbacks == nil {
 		user.eventCallbacks = make([]*eventCallback,0)
 	}
 	user.eventCallbacks = append(user.eventCallbacks, callback)
+	return len(user.eventCallbacks) - 1
 }
 
 func (user *proxyUser) removeEventCallback(callback *eventCallback) {
@@ -553,11 +565,12 @@ func (user *proxyUser) removeEventCallback(callback *eventCallback) {
 	}
 }
 
-func (user *proxyUser) addChannelFilter(function *channelFilterFunc) {
+func (user *proxyUser) addChannelFilter(function *channelFilterFunc) int {
 	if user.channelFilters == nil {
 		user.channelFilters = make([]*channelFilterFunc,0)
 	}
 	user.channelFilters = append(user.channelFilters, function)
+	return len(user.channelFilters) -1
 }
 
 func (user *proxyUser) removeChannelFilter(function *channelFilterFunc) {
