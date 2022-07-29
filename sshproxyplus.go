@@ -109,6 +109,36 @@ func main() {
 			if (err == nil)	{
 				Logger.Println(string(data))
 			}
+		} else if input == "c" {
+			message := controllerMessage{
+				MessageType: CONTROLLER_MESSAGE_CREATE_PROXY,
+				ProxyData: []byte(`{
+					"DefaultRemotePort": 22,
+					"DefaultRemoteIP": "127.0.0.1",
+					"ListenIP": "0.0.0.0",
+					"ListenPort": 2222,
+					"SessionFolder": "html/sessions",
+					"TLSCert": "tls_keys/server.crt",
+					"TLSKey": "tls_keys/server.key",
+					"OverridePassword": "password",
+					"OverrideUser": "ben",
+					"WebListenPort": 8443,
+					"ServerVersion": "SSH-2.0-OpenSSH_7.9p1 Raspbian-10",
+					"Users": {
+						"testuser:": {
+							"Username": "testuser",
+							"Password": "",
+							"RemoteHost": "127.0.0.1:22",
+							"RemoteUsername": "ben",
+							"RemotePassword": "password"
+						}
+					}}`),
+			}
+			err, signedMessage := message.sign([]byte(controller.PresharedKey))
+			data, err := json.Marshal(&signedMessage)
+			if (err == nil)	{
+				Logger.Println(string(data))
+			}
 		}
 		fmt.Println("Enter q to quit.")
 		for index, proxy := range controller.Proxies {
