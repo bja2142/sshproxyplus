@@ -5,6 +5,7 @@ package main
 import (
     "testing"
 	"fmt"
+	"log"
 )
 
 type testLogger struct {
@@ -21,29 +22,22 @@ func (logger testLogger) Println(v ...any) {
 
 func makeNewTestProxy() *proxyContext {
 
-	logger :=  testLogger{}
-	server_port := 22
-	server_ip := "127.0.0.1"
-	listen_ip := "0.0.0.0"
-	listen_port := 2222
-	web_port := 80
-	session_folder := "sessions"
-	override_password := ""
-	override_user := ""
-	require_password := true
 	
 	return &proxyContext{
-		server_ssh_port: &server_port,
-		server_ssh_ip: &server_ip,
-		listen_ip: &listen_ip,
-		listen_port: &listen_port,
-		log: logger,
-		session_folder: &session_folder,
-		override_password: override_password,
-		override_user: override_user,
-		web_listen_port: &web_port,
-		RequireValidPassword: require_password,
-		Users: map[string]*proxyUser{}}
+		log: log.Default(),
+		Users: map[string]*proxyUser{},
+		userSessions: map[string]map[string]*sessionContext{},
+		allSessions: map[string]*sessionContext{},
+		Viewers: map[string]*proxySessionViewer{},
+		DefaultRemotePort: 22,
+		DefaultRemoteIP: "127.0.0.1",
+		ListenIP: "0.0.0.0",
+		ListenPort: 2222,
+		SessionFolder: "html/sessions",
+		WebListenPort: 8080,
+		ServerVersion: "SSH-2.0-OpenSSH_7.9p1 Raspbian-10",
+		PublicAccess:true,
+	}
 }
 
 func makeNewTestProxyUser() *proxyUser {
@@ -59,11 +53,11 @@ func TestAuthenticateUserDefault(t *testing.T) {
 
 	proxy := makeNewTestProxy()
 
-	expected_user := "override_user"
-	expected_pass := "override_password"
+	expected_user := "OverrideUser"
+	expected_pass := "OverridePassword"
 
-	proxy.override_user = expected_user
-	proxy.override_password = expected_pass
+	proxy.OverrideUser = expected_user
+	proxy.OverridePassword = expected_pass
 
 	test_user := expected_user
 	test_pass := expected_pass
@@ -87,11 +81,11 @@ func TestAuthenticateUserAnyValue(t *testing.T) {
 
 	proxy := makeNewTestProxy()
 
-	expected_user := "override_user"
-	expected_pass := "override_password"
+	expected_user := "OverrideUser"
+	expected_pass := "OverridePassword"
 
-	proxy.override_user = expected_user
-	proxy.override_password = expected_pass
+	proxy.OverrideUser = expected_user
+	proxy.OverridePassword = expected_pass
 
 	test_user := "something_else"
 	test_pass := "literally_anything"
@@ -115,11 +109,11 @@ func TestAuthenticateUserAnyUserBlankPassword(t *testing.T) {
 
 	proxy := makeNewTestProxy()
 
-	expected_user := "override_user"
-	expected_pass := "override_password"
+	expected_user := "OverrideUser"
+	expected_pass := "OverridePassword"
 
-	proxy.override_user = expected_user
-	proxy.override_password = expected_pass
+	proxy.OverrideUser = expected_user
+	proxy.OverridePassword = expected_pass
 
 	test_user := "something_else"
 	test_pass := ""

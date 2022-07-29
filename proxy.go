@@ -127,12 +127,13 @@ func (proxy *proxyContext) startProxy() {
 	},
 	}
 	config.AddHostKey(proxy.private_key)
-	proxy.running = true
+	
 	listener, err := net.Listen("tcp",  proxy.ListenIP +":"+strconv.Itoa(proxy.ListenPort))
 	if err != nil {
 		panic(err)
 	}
 	proxy.listener = listener
+	proxy.running = true
 	for proxy.running {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -203,16 +204,22 @@ func (proxy *proxyContext) addSessionToSessionList(session * sessionContext) {
 
 
 
-func (proxy *proxyContext) getProxyUser(username, password string) (error, *proxyUser,bool) {
+func (proxy *proxyContext) getProxyUser(username, password string, cloneUser bool) (error, *proxyUser,bool) {
 	err := errors.New("not a valid user")
 	key := buildProxyUserKey(username,password)
 	if  val, ok := proxy.Users[key]; ok {
-		return_val := *val
-		return nil, &return_val, false
+		if(cloneUser) {
+			return_val := *val
+			return nil, &return_val, false
+		}
+		return nil, val, false
 	} else if  val, ok := proxy.Users[buildProxyUserKey(username,"")]; ok {
 		if val.Password == "" {
-			return_val := *val
-			return nil, &return_val, true
+			if (cloneUser) {
+				return_val := *val
+				return nil, &return_val, true
+			}
+			return nil, val, true
 		} else {
 			return err, nil, false
 		}
@@ -260,7 +267,7 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 	}
 
 	if(len(proxy.Users)>0) {
-		err, user,password_blank := proxy.getProxyUser(username, password)
+		err, user,password_blank := proxy.getProxyUser(username, password,true)
 		if (err != nil) {
 			if ! proxy.RequireValidPassword {
 				return nil, default_user
@@ -294,6 +301,11 @@ func makeProxyFromJSON(data []byte, signer ssh.Signer) (error, *proxyContext) {
 }
 
 func (proxy *proxyContext) initialize(defaultSigner ssh.Signer) {
+
+	if (proxy.log == nil) {
+		proxy.log = log.Default()
+	}
+
 	if proxy.Users == nil {
 		proxy.Users = map[string]*proxyUser{}
 	}
@@ -316,9 +328,11 @@ func (proxy *proxyContext) initialize(defaultSigner ssh.Signer) {
 	for _, viewer := range proxy.Viewers {
 		viewer.proxy = proxy
 		if(viewer.User != nil) {
-			err, user, _ := proxy.getProxyUser(viewer.User.Username, viewer.User.Password)
-			if err == nil {
+			err, user, _ := proxy.getProxyUser(viewer.User.Username, viewer.User.Password,false)
+			if err == nil && user != nil{
 				viewer.User = user
+			} else {
+				proxy.addProxyUser(viewer.User )
 			}
 		}
 	}
@@ -435,7 +449,7 @@ func (proxy *proxyContext) getUsers() []string {
 
 func (proxy *proxyContext) makeSessionViewerForUser(user_key string) (error, *proxySessionViewer) {
 
-	err,user,_ := proxy.getProxyUser(user_key, "")
+	err,user,_ := proxy.getProxyUser(user_key, "",true)
 
 	if user != nil {
 		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST,proxy, user)
@@ -447,7 +461,7 @@ func (proxy *proxyContext) makeSessionViewerForUser(user_key string) (error, *pr
 
 
 func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session string) (error, *proxySessionViewer) {
-	err,user,_ := proxy.getProxyUser(user_key, "")
+	err,user,_ := proxy.getProxyUser(user_key, "",true)
 
 	if user != nil {
 		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST, proxy, user)

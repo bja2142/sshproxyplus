@@ -18,7 +18,7 @@ type controllerHMAC struct {
 
 type controllerMessage struct {
 	MessageType		string
-	ProxyData 		[]byte `json:"omitempty"`
+	ProxyData 		[]byte `json:"ProxyData,omitempty"`
 	ProxyID			uint64 `json:"omitempty"`
 	ViewerSecret	string `json:"omitempty"`
 	SessionKey		string `json:"omitempty"`
@@ -29,7 +29,7 @@ type controllerMessage struct {
 	CallbackURL    	string `json:"omitempty"`
 	ProxyUser		*proxyUser `json:"omitempty"`
 	FindString		[]byte `json:"omitempty"`
-	ReplaceString	[]byte `json:"omitempty`
+	ReplaceString	[]byte `json:"omitempty"`
 }
 
 const CONTROLLER_MESSAGE_CREATE_PROXY			string = "create-proxy"

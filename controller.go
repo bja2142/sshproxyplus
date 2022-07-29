@@ -337,7 +337,7 @@ func (controller *proxyController) addExistingProxy(proxy *proxyContext) uint64 
 func (controller *proxyController) startProxy(proxyID uint64) error {
 	proxy, err := controller.getProxy(proxyID)
 	if proxy != nil {
-		proxy.startProxy()
+		go proxy.startProxy()
 	}
 	return err
 }
@@ -363,7 +363,7 @@ func (controller *proxyController) addEventCallbackToUser(proxyID uint64, userna
 	proxy, err := controller.getProxy(proxyID)
 	if proxy != nil {
 		var user *proxyUser
-		err, user, _ = proxy.getProxyUser(username,password)
+		err, user, _ = proxy.getProxyUser(username,password,false)
 		if (err != nil) {
 			index := user.addEventCallback(callback)
 			key = fmt.Sprintf("callback-proxy%v-%s-%s-%v",proxyID,username,password,index)
@@ -394,7 +394,7 @@ func (controller *proxyController) removeEventCallbackFromUser(proxyID uint64, u
 	proxy, _ := controller.getProxy(proxyID)
 	if proxy != nil {
 		var user *proxyUser
-		err, user, _ = proxy.getProxyUser(username, password)
+		err, user, _ = proxy.getProxyUser(username, password,false)
 		if (err != nil) {
 			user.removeEventCallback(callback)
 		}
@@ -496,6 +496,7 @@ func (controller *proxyController) createUserSessionViewer(proxyID uint64, usern
 	return err, viewer
 }
 
+//TODO add getProxyUserClone
 
 
 func (controller *proxyController) addChannelFilterToUser(proxyID uint64, username, password string, function *channelFilterFunc) (error,string) {
@@ -504,7 +505,7 @@ func (controller *proxyController) addChannelFilterToUser(proxyID uint64, userna
 	var user *proxyUser
 	var key string
 	if proxy != nil {
-		err, user, _ = proxy.getProxyUser(username, password)
+		err, user, _ = proxy.getProxyUser(username, password,true)
 		if (err != nil) {
 			index := user.addChannelFilter(function)
 			key = fmt.Sprintf("filter-proxy%v-%s-%s-%v",proxyID,username,password,index)
@@ -534,7 +535,7 @@ func (controller *proxyController) removeChannelFilterFromUser(proxyID uint64, u
 	proxy, _ := controller.getProxy(proxyID)
 	if proxy != nil {
 		var user *proxyUser
-		err, user, _ = proxy.getProxyUser(username,password)
+		err, user, _ = proxy.getProxyUser(username,password,false)
 		if (err != nil) {
 			user.removeChannelFilter(function)
 		}
