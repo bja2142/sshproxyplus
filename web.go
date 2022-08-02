@@ -242,7 +242,7 @@ func (server *proxyWebServer) socketHandler(w http.ResponseWriter, r *http.Reque
     }
     defer conn.Close()
 
-	Logger.Printf("got new connection on web socket\n")
+	server.proxy.log.Printf("got new connection on web socket\n")
 
     // The event loop
     for {
@@ -307,7 +307,7 @@ func (server *proxyWebServer) socketHandler(w http.ResponseWriter, r *http.Reque
 				}
 		}
 	}
-	Logger.Printf("ending session with client")
+	server.proxy.log.Printf("ending session with client")
 }
 
 func home(w http.ResponseWriter, r *http.Request) {
@@ -338,7 +338,7 @@ func (server *proxyWebServer) ServeWebSocketSessionServer() {
 	http.HandleFunc("/socket", server.socketHandler)
     //http.HandleFunc("/", home)
 
-	Logger.Printf("starting web socket server on %v\n",host)
+	server.proxy.log.Printf("starting web socket server on %v\n",host)
 	if TLSCert != "." && TLSKey != "." {
 		http.ListenAndServeTLS(host, TLSCert, TLSKey,nil)
 	} else {

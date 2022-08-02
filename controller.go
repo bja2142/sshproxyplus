@@ -81,16 +81,18 @@ func (controller *proxyController) handleWebProxyRequest(w http.ResponseWriter, 
 	id := r.URL.Query().Get("id")
 	numericID,err := strconv.ParseUint(id, 10, 64)
 	controller.log.Printf("Got websocket request for proxy with id: %v\n",numericID)
-	if err == nil {
-		proxy, _ := controller.getProxy(numericID)
-		if proxy != nil {
-			proxyWebHandler := &proxyWebServer{
-				proxy:proxy,
-				BaseURI: controller.BaseURI,
-			}
-			proxyWebHandler.socketHandler(w,r)
-		}
+	if err != nil {
+		numericID = 0
 	}
+	proxy, _ := controller.getProxy(numericID)
+	if proxy != nil {
+		proxyWebHandler := &proxyWebServer{
+			proxy:proxy,
+			BaseURI: controller.BaseURI,
+		}
+		proxyWebHandler.socketHandler(w,r)
+	}
+	
 }
 
 func (controller *proxyController) startWebServer() error {
@@ -116,7 +118,7 @@ func (controller *proxyController) startWebServer() error {
 	}
 
 	if (err != nil)	{
-		controller.log.Println("Error creating web server:",err.Error())
+		controller.log.Println(err.Error())
 		return err
 	} 
 	return nil
@@ -197,6 +199,9 @@ func (controller *proxyController) initialize() {
 	if controller.channelFilters == nil {
 		controller.channelFilters = make(map[string]*channelFilterFunc)
 	}
+	if controller.eventCallbacks == nil {
+		controller.eventCallbacks = make(map[string]*eventCallback)
+	}
 	if controller.Proxies == nil {
 		controller.Proxies = make(map[uint64]*proxyContext)
 	}
@@ -213,21 +218,27 @@ func (controller *proxyController) initialize() {
 		proxy.initialize(controller.defaultSigner)
 	}
 	controller.updateProxiesWithCurrentLogger(false)
+	
 }
 
-
-func (controller *proxyController) listen() {
-	
-	switch controller.SocketType {
-	case PROXY_CONTROLLER_SOCKET_PLAIN:
-		controller.socket = &proxyControllerSocketTCP{plaintext: true}
-	case PROXY_CONTROLLER_SOCKET_PLAIN_WEBSOCKET:
-		controller.socket = &proxyControllerSocketWeb{plaintext: true}
-	case PROXY_CONTROLLER_SOCKET_TLS:
-		controller.socket = &proxyControllerSocketTCP{TLSCert: controller.TLSCert, TLSKey: controller.TLSKey}
-	case PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET:
-		controller.socket = &proxyControllerSocketWeb{TLSCert: controller.TLSCert, TLSKey: controller.TLSKey}
+func (controller *proxyController) initializeSocket() {
+	if(controller.socket == nil) {
+		switch controller.SocketType {
+		case PROXY_CONTROLLER_SOCKET_PLAIN:
+			controller.socket = &proxyControllerSocketTCP{plaintext: true}
+		case PROXY_CONTROLLER_SOCKET_PLAIN_WEBSOCKET:
+			controller.socket = &proxyControllerSocketWeb{plaintext: true}
+		case PROXY_CONTROLLER_SOCKET_TLS:
+			controller.socket = &proxyControllerSocketTCP{TLSCert: controller.TLSCert, TLSKey: controller.TLSKey}
+		case PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET:
+			controller.socket = &proxyControllerSocketWeb{TLSCert: controller.TLSCert, TLSKey: controller.TLSKey}
+		default:
+			return
+		}
 	}
+}
+func (controller *proxyController) listen() {
+	controller.initializeSocket()
 	go controller.socket.ListenAndServe(controller.SocketHost, controller.clientHandler)
 }
 
@@ -264,8 +275,11 @@ func (controller *proxyController) addProxyFromJSON(data []byte) (error,uint64) 
 func (controller *proxyController) destroyProxy(proxyID uint64) (err error) {
 	controller.mutex.Lock()
 		if proxy, ok := controller.Proxies[proxyID]; ok {
+			if(proxy.running) {
+				proxy.Stop()
+			}
+			
 			delete(controller.Proxies, proxyID)
-			proxy.Stop()
 		} else {
 			err = errors.New(fmt.Sprintf("No proxy with this ID exists: %v", proxyID))
 		}
@@ -289,6 +303,7 @@ func (controller *proxyController) addUserToProxy(proxyID uint64, user *proxyUse
 	}
 	return err, key
 }
+
 
 func (controller *proxyController) removeUserFromProxy(proxyID uint64, username, password string) (error) {
 	proxy, err := controller.getProxy(proxyID)
@@ -364,11 +379,11 @@ func (controller *proxyController) addEventCallbackToUser(proxyID uint64, userna
 	if proxy != nil {
 		var user *proxyUser
 		err, user, _ = proxy.getProxyUser(username,password,false)
-		if (err != nil) {
+		if (err == nil) {
 			index := user.addEventCallback(callback)
 			key = fmt.Sprintf("callback-proxy%v-%s-%s-%v",proxyID,username,password,index)
 			_, ok := controller.eventCallbacks[key];
-			for ! ok {
+			for ok {
 				key = key + "."
 				_, ok = controller.eventCallbacks[key];
 			}
@@ -424,6 +439,11 @@ func (controller *proxyController) getProxyViewerByViewerKey(proxyID uint64, vie
 	return err, viewer
 }
 
+/*
+Note that if multiple viewers exist for the same session key, this will
+only return the first one and stop looking
+*/
+
 func (controller *proxyController) getProxyViewerBySessionKey(proxyID uint64, sessionKey string) (error, *proxySessionViewer) {
 	var finalViewer *proxySessionViewer
 	err, allViewers := controller.getProxyViewers(proxyID)
@@ -438,6 +458,8 @@ func (controller *proxyController) getProxyViewerBySessionKey(proxyID uint64, se
 	return err, finalViewer
 }
 
+
+
 func (controller *proxyController) getProxyViewersBySessionKey(proxyID uint64, sessionKey string) (error, []*proxySessionViewer) {
 	finalViewers := make([]*proxySessionViewer,0)
 	err, allViewers := controller.getProxyViewers(proxyID)
@@ -450,6 +472,12 @@ func (controller *proxyController) getProxyViewersBySessionKey(proxyID uint64, s
 	}
 	return err, finalViewers
 }
+
+
+/*
+Note that if multiple viewers exist for the same user, this will
+only return the first one and stop looking
+*/
 
 func (controller *proxyController) getProxyViewerByUsername(proxyID uint64, username string) (error, *proxySessionViewer) {
 	var finalViewer *proxySessionViewer
@@ -478,6 +506,17 @@ func (controller *proxyController) getProxyViewersByUsername(proxyID uint64, use
 	return err, finalViewers
 }
 
+func (controller *proxyController) getProxyViewersAsList(proxyID uint64) (error, []*proxySessionViewer) {
+	finalViewers := make([]*proxySessionViewer,0)
+	err, allViewers := controller.getProxyViewers(proxyID)
+	if(err == nil) {
+		for _,viewer := range allViewers {
+			finalViewers = append(finalViewers, viewer)
+		}
+	}
+	return err, finalViewers
+}
+
 func (controller *proxyController) createSessionViewer(proxyID uint64, username, sessionKey string) (error, *proxySessionViewer) {
 	var viewer *proxySessionViewer
 	proxy, err := controller.getProxy(proxyID)
@@ -500,17 +539,16 @@ func (controller *proxyController) createUserSessionViewer(proxyID uint64, usern
 
 
 func (controller *proxyController) addChannelFilterToUser(proxyID uint64, username, password string, function *channelFilterFunc) (error,string) {
-	proxy, _ := controller.getProxy(proxyID)
-	var err error
+	proxy, err := controller.getProxy(proxyID)
 	var user *proxyUser
 	var key string
 	if proxy != nil {
-		err, user, _ = proxy.getProxyUser(username, password,true)
-		if (err != nil) {
+		err, user, _ = proxy.getProxyUser(username, password,false)
+		if (err == nil) {
 			index := user.addChannelFilter(function)
 			key = fmt.Sprintf("filter-proxy%v-%s-%s-%v",proxyID,username,password,index)
 			_, ok := controller.channelFilters[key];
-			for  ! ok {
+			for  ok {
 				key = key + "."
 				_, ok = controller.channelFilters[key];
 			}
@@ -541,6 +579,11 @@ func (controller *proxyController) removeChannelFilterFromUser(proxyID uint64, u
 		}
 	}
 	return err 
+}
+
+// TODO:
+func (controller *proxyController) removeViewerFromProxy(proxyID uint64, viewerKey string) error {
+	return nil
 }
 
 

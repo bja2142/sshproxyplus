@@ -464,7 +464,7 @@ func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session 
 	err,user,_ := proxy.getProxyUser(user_key, "",true)
 
 	if user != nil {
-		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST, proxy, user)
+		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_SINGLE, proxy, user)
 		viewer.SessionKey = session
 		proxy.addSessionViewer(viewer)
 		return err, viewer

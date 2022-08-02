@@ -149,7 +149,7 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 		} else if message.Username != "" {
 			err, viewers = controller.getProxyViewersByUsername(message.ProxyID, message.Username)
 		} else {
-			err, viewers = controller.getProxyViewers(message.ProxyID)			
+			err, viewers = controller.getProxyViewersAsList(message.ProxyID)			
 		}
 		if err == nil {
 			var data []byte
@@ -211,13 +211,15 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 		var key string
 		if message.FindString != nil && message.CallbackURL != "" && message.Username != "" {
 			callback := &eventCallback{
-				events: map[string]bool{EVENT_SESSION_START:true, EVENT_SESSION_STOP: true},
+				events: map[string]bool{EVENT_MESSAGE: true},
 				handler: func(event sessionEvent) {
-					data, err := json.Marshal(&event)
-					if err == nil {
-						responseBody := bytes.NewBuffer(data)
-						resp, _ := http.Post(message.CallbackURL, "application/json",responseBody)
-						defer resp.Body.Close()
+					if bytes.Index(event.Data, message.FindString) != -1 {
+						data, err := json.Marshal(&event)
+						if err == nil {
+							responseBody := bytes.NewBuffer(data)
+							resp, _ := http.Post(message.CallbackURL, "application/json",responseBody)
+							defer resp.Body.Close()
+						}
 					}
 				},
 			}
