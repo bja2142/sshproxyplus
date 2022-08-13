@@ -6,6 +6,7 @@ import (
 	"time"
 	"encoding/json"
 	"net"
+//	"io"
 	//"net/http"
 	"net/url"
 	"github.com/gorilla/websocket"
@@ -20,11 +21,17 @@ import (
 	"encoding/pem"
 )
 
+func newRandomPort() *big.Int {
+	port, _ := rand.Int(rand.Reader,big.NewInt(65534-1024))
+	port.Add(port,big.NewInt(1025))
+	return port
+}
+
 func makeNewController() *proxyController {
-	port, _ := rand.Int(rand.Reader,big.NewInt(60000))
+	port := newRandomPort()
 	controller := &proxyController{
 		SocketType: PROXY_CONTROLLER_SOCKET_PLAIN,
-		SocketHost: "127.0.0.1:"+port.Add(port,big.NewInt(2048)).Text(10),
+		SocketHost: "127.0.0.1:"+port.Text(10),
 		PresharedKey: "key",
 		Proxies: make(map[uint64]*proxyContext),
 		WebHost: "127.0.0.1:"+port.Add(port,big.NewInt(1)).Text(10),
@@ -936,6 +943,13 @@ func TestControllerStartWebServerTLS(t *testing.T) {
     }
 }
 
-func TestControllerStartProxy(t *testing.T) {
+	
+// verify web server is able to see events occurring
 
-}
+
+
+
+
+
+// test start and stop of web server
+// test getting session 

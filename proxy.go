@@ -84,6 +84,8 @@ func (proxy *proxyContext) startProxy() {
 	config := &ssh.ServerConfig{
 	NoClientAuth: false,
 	MaxAuthTries: 3,
+	//TODO: move this function into the session class so it doesn't
+	// need the session key
 	PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 		
 		proxy.log.Printf("Got client (%s) using creds (%s:%s)\n",

@@ -301,19 +301,24 @@ func (session * sessionContext) markThreadStarted() {
 
 
 func (session * sessionContext) end() {
-	session.active = false
-	session.stop_time = time.Now()
-	session.handleEvent(
-		&sessionEvent{
-			Type: EVENT_SESSION_STOP,
-			StopTime: session.getStopTimeAsUnix(),
-		})
-	session.signalSessionEnd()
-	session.finalizeLog()
-	session.proxy.addSessionToSessionList(session)
-	conn := *session.remote_conn
-	conn.Close()
+	if (session.active) {
+		session.active = false
+		session.stop_time = time.Now()
+		session.handleEvent(
+			&sessionEvent{
+				Type: EVENT_SESSION_STOP,
+				StopTime: session.getStopTimeAsUnix(),
+			})
+		session.signalSessionEnd()
+		session.finalizeLog()
+		session.proxy.addSessionToSessionList(session)
+		if session.remote_conn != nil {
+			conn := *session.remote_conn
+			conn.Close()
+		}
+	}
 }
+
 
 func (session * sessionContext) markThreadStopped() {
 	session.mutex.Lock()
