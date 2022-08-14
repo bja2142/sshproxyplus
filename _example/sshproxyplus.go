@@ -23,7 +23,7 @@ import (
 	"golang.org/x/crypto/ssh"
 	"net"
 	"encoding/json"
-	"github.com/bja2142/sshproxyplus"
+	. "github.com/bja2142/sshproxyplus"
 )
 
 var (
@@ -53,9 +53,9 @@ func main() {
 			Proxies: make(map[uint64]*ProxyContext),
 			WebHost: "0.0.0.0:"+strconv.Itoa(*args["web_listen_port"].(*int)),
 			WebStaticDir: *args["controller_web_static_dir"].(*string),
-			log: logger,
+			Log: logger,
 			BaseURI: args["base_URI"].(string),
-			defaultSigner: args["default_private_key"].(ssh.Signer),
+			DefaultSigner: args["default_private_key"].(ssh.Signer),
 		}	
 
 		cur_proxy := useArgsForNewProxyContext(args)
@@ -142,7 +142,7 @@ func main() {
 		}
 		fmt.Println("Enter q to quit.")
 		for index, proxy := range controller.Proxies {
-			log.Printf("Proxy %v Active: %v\n", index, proxy.active)
+			log.Printf("Proxy %v Active: %v\n", index, proxy.IsActive())
 		}
 	}
 
@@ -150,10 +150,10 @@ func main() {
 
 func makeNewViewersForAllUsers(proxy * ProxyContext, proxyID uint64) {
 	for key,user := range proxy.Users {
-		proxy.log.Println(key)
+		logger.Println(key)
 		err, viewer := proxy.MakeSessionViewerForUser(user.Username,user.Password)
 		if (err == nil) {
-			proxy.log.Printf("%v:%v\n", key,viewer.buildSignedURL(proxyID))
+			logger.Printf("%v:%v\n", key,viewer.BuildSignedURL(proxyID))
 		}
 	}
 }
@@ -247,7 +247,7 @@ func parseArgs() map[string]interface{} {
 	}
 
 	if err != nil {
-		default_private_key,err = generateSigner()
+		default_private_key,err = GenerateSigner()
 		logger.Printf("Generating new key.")
 		if err != nil {
 			log.Fatal("Unable to load or generate a public key")
@@ -300,7 +300,7 @@ func useArgsForNewProxyContext(args map[string]interface{}) *ProxyContext {
 	proxy.RequireValidPassword = *args["require_valid_password"].(*bool)
 	proxy.BaseURI = args["base_URI"].(string)
 	proxy.PublicAccess = *args["public_access"].(*bool)
-	proxy.log = logger
+	proxy.Log = logger
 
 	return proxy
 }
