@@ -1,0 +1,48 @@
+name: Test And Publish
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check out code
+      uses: actions/checkout@v3
+    - name: Get Go
+      uses: actions/setup-go@v3
+      with:
+        go-version: '1.18.0-rc.1'
+    - name: Get Dependencies
+      run: go mod tidy && go get golang.org/x/tools/cmd/godoc && go install golang.org/x/tools/cmd/godoc 
+    - name: Run Tests
+      run: go test -cover 
+    - name: Build Artifacts
+      run: bash build_reports.sh
+    - name: Upload artifact
+      uses: actions/upload-pages-artifact@v1
+      with:
+        path: ./public
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-and-test
+    if: github.ref == 'refs/heads/main'
+    steps:
+    - name: Deploy to GitHub Pages
+      id: deployment
+      uses: actions/deploy-pages@v1
