@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 import (
 	"testing"
@@ -13,10 +13,10 @@ import (
 func TestMessageWrapperVerifyValid(t *testing.T) {
 	key := []byte("key")
 	messageJson := []byte(`{"Message":"eyJNZXNzYWdlVHlwZSI6Imxpc3QtcHJveGllcyJ9","HMAC":"ax2pX7hEbL29TIquZL7JQ+wtSTMTI9xEKIAtoKORKYQ="}`)
-	wrapper := &controllerHMAC{}
+	wrapper := &ControllerHMAC{}
 	json.Unmarshal(messageJson,wrapper)
 
-	err, message := wrapper.verify(key)
+	err, message := wrapper.Verify(key)
 
 	if(err != nil) {
 		t.Fatalf(`*messageWrapper verify() encountered an error while verifying a valid message: %s`,err)
@@ -29,10 +29,10 @@ func TestMessageWrapperVerifyValid(t *testing.T) {
 func TestMessageWrapperVerifyInvalid(t *testing.T) {
 	key := []byte("key")
 	messageJson := []byte(`{"Message":"eyJNZXNzYWdlVHlwZSI6Imxpc3QtcHJveGllcyJ9","HMAC":"ax2pX7hEbL2fTIquZL7JQ+wtSTMTI9fEKIAtoKORKYQ="}`)
-	wrapper := &controllerHMAC{}
+	wrapper := &ControllerHMAC{}
 	json.Unmarshal(messageJson,wrapper)
 
-	err, _ := wrapper.verify(key)
+	err, _ := wrapper.Verify(key)
 
 	if(err == nil) {
 		t.Fatalf(`*messageWrapper verify() verified a message when it shouldn't have`)
@@ -42,10 +42,10 @@ func TestMessageWrapperVerifyInvalid(t *testing.T) {
 func TestMessageWrapperVerifyInvalidBlank(t *testing.T) {
 	key := []byte("key")
 	messageJson := []byte(`{"Message":"eyJNZXNzYWdlVHlwZSI6Imxpc3QtcHJveGllcyJ9","HMAC":""}`)
-	wrapper := &controllerHMAC{}
+	wrapper := &ControllerHMAC{}
 	json.Unmarshal(messageJson,wrapper)
 
-	err, _ := wrapper.verify(key)
+	err, _ := wrapper.Verify(key)
 
 	if(err == nil) {
 		t.Fatalf(`*messageWrapper verify() verified a message when it shouldn't have`)
@@ -55,22 +55,22 @@ func TestMessageWrapperVerifyInvalidBlank(t *testing.T) {
 func TestMessageWrapperSign(t *testing.T) {
 	key := []byte("key")
 	messageJson := []byte(`{"Message":"eyJNZXNzYWdlVHlwZSI6Imxpc3QtcHJveGllcyJ9","HMAC":"ax2pX7hEbL29TIquZL7JQ+wtSTMTI9xEKIAtoKORKYQ="}`)
-	expected := &controllerHMAC{}
+	expected := &ControllerHMAC{}
 	json.Unmarshal(messageJson,expected)
 
-	inputMessage := controllerMessage{MessageType: "list-proxies"}
+	inputMessage := ControllerMessage{MessageType: "list-proxies"}
 
-	err, outWrapper := inputMessage.sign(key)
+	err, outWrapper := inputMessage.Sign(key)
 
 	if(err != nil) {
-		t.Fatalf(`*controllerMessage sign() encountered an error while signing a valid message: %s`,err)
+		t.Fatalf(`*ControllerMessage sign() encountered an error while signing a valid message: %s`,err)
 	}
 	if ! bytes.Equal(outWrapper.Message, expected.Message) {
-		t.Errorf(`*controllerMessage sign() did not generate expected Message. Wanted "%s"; got: %s`, expected.Message, outWrapper.Message)
+		t.Errorf(`*ControllerMessage sign() did not generate expected Message. Wanted "%s"; got: %s`, expected.Message, outWrapper.Message)
 	}
 
 	if ! bytes.Equal(outWrapper.Message, expected.Message) {
-		t.Errorf(`*controllerMessage sign() did not generate expected HMAC. Wanted "%s"; got: %s`, hex.EncodeToString(expected.Message), hex.EncodeToString(outWrapper.Message))
+		t.Errorf(`*ControllerMessage sign() did not generate expected HMAC. Wanted "%s"; got: %s`, hex.EncodeToString(expected.Message), hex.EncodeToString(outWrapper.Message))
 	}
 
 }
@@ -78,7 +78,7 @@ func TestMessageWrapperSign(t *testing.T) {
 func TestMessageUnsupported(t *testing.T) {
 	controller := makeNewController()
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: "this is a fake message",
 		}	
 	
@@ -87,7 +87,7 @@ func TestMessageUnsupported(t *testing.T) {
 	_, ErrorFound := replyObj["Error"]
 
 	if ! ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to error when it should have.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to error when it should have.")
 	}
 
 
@@ -96,7 +96,7 @@ func TestMessageUnsupported(t *testing.T) {
 func TestMessageCreateProxy(t *testing.T) {
 
 	messageJson := []byte(`{"MessageType":"create-proxy","ProxyData":"e30="}`)
-	message := &controllerMessage{}
+	message := &ControllerMessage{}
 	json.Unmarshal(messageJson,message)
 
 	controller := makeNewController()
@@ -114,7 +114,7 @@ func TestMessageCreateProxy(t *testing.T) {
 	actualID :=  uint64(replyObj["ProxyID"].(float64))
 
 	if(  !ProxyIDFound) {
-		t.Errorf(`*controllerMessage handleMessage() did have one of the expected keys in its reply. Wanted ProxyID. Got: %+v`, replyObj)
+		t.Errorf(`*ControllerMessage handleMessage() did have one of the expected keys in its reply. Wanted ProxyID. Got: %+v`, replyObj)
 	} else {
 		if actualID != expectedID {
 			t.Fatalf("Did not get expected proxy ID. Wanted %v, got %v",expectedID,actualID)
@@ -123,9 +123,9 @@ func TestMessageCreateProxy(t *testing.T) {
 			t.Fatalf("Did not get expected MessageType. Wanted %s, got %v",expectedMessageReplyType,replyObj["MessageType"])
 		}
 	}
-	_, err := controller.getProxy(actualID)
+	_, err := controller.GetProxy(actualID)
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() error when getting proxy: %s",err)
+		t.Fatalf("*ControllerMessage handleMessage() error when getting proxy: %s",err)
 	}
 
 }
@@ -135,16 +135,16 @@ func TestMessageStartProxy(t *testing.T) {
 
 	proxyJSON := []byte(`{}`)
 
-	err,proxyID := controller.addProxyFromJSON(proxyJSON)
+	err,proxyID := controller.AddProxyFromJSON(proxyJSON)
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
 	}
-	proxy, err := controller.getProxy(proxyID)
+	proxy, err := controller.GetProxy(proxyID)
 	if err != nil {
-		t.Fatalf("*controller getProxy() error when getting proxy just created: %s",err)
+		t.Fatalf("*controller.GetProxy() error when getting proxy just created: %s",err)
 	}
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_START_PROXY,
 		ProxyID: proxyID,
 		}	
@@ -155,25 +155,25 @@ func TestMessageStartProxy(t *testing.T) {
 	for proxy.running == false {
 		time.Sleep(100)
 	}
-	controller.stopProxy(proxyID)
+	controller.StopProxy(proxyID)
 }
 
-func simulateMessage(message *controllerMessage, controller *proxyController, t *testing.T) map[string]interface{} {
+func simulateMessage(message *ControllerMessage, controller *ProxyController, t *testing.T) map[string]interface{} {
 	expectedMessageReplyType := message.MessageType + "-reply"
-	reply := message.handleMessage(controller)
+	reply := message.HandleMessage(controller)
 	replyObj :=  make(map[string]interface{})
 	err := json.Unmarshal(reply, &replyObj)
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() did not craft valid json reply: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() did not craft valid json reply: %s", err)
 	}
 	messageType, MessageTypeFound := replyObj["MessageType"]
 
 	if( !MessageTypeFound) {
-		t.Errorf("*controllerMessage handleMessage() did not craft correct reply; did not find MessageType")
+		t.Errorf("*ControllerMessage handleMessage() did not craft correct reply; did not find MessageType")
 	}
 
 	if messageType != expectedMessageReplyType {
-		t.Errorf("*controllerMessage handleMessage() did not craft correct reply; expected MessageType %s, got %s", expectedMessageReplyType, messageType)
+		t.Errorf("*ControllerMessage handleMessage() did not craft correct reply; expected MessageType %s, got %s", expectedMessageReplyType, messageType)
 	}
 	//controller.log.Println(string(reply))
 	return replyObj
@@ -184,32 +184,32 @@ func TestMessageStopProxy(t *testing.T) {
 
 	proxyJSON := []byte(`{}`)
 
-	err,proxyID := controller.addProxyFromJSON(proxyJSON)
+	err,proxyID := controller.AddProxyFromJSON(proxyJSON)
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
 	}
-	proxy, err := controller.getProxy(proxyID)
+	proxy, err := controller.GetProxy(proxyID)
 	if err != nil {
-		t.Fatalf("*controller getProxy() error when getting proxy just created: %s",err)
+		t.Fatalf("*controller.GetProxy() error when getting proxy just created: %s",err)
 	}
 
-	err = controller.startProxy(proxyID)
+	err = controller.StartProxy(proxyID)
 	for proxy.running == false {
 		time.Sleep(100)
 	}
 	if (err != nil) {
-		t.Fatalf("*controller startProxy() error when starting proxy: %s",err)
+		t.Fatalf("*controller.StartProxy() error when starting proxy: %s",err)
 	}
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_STOP_PROXY,
 		ProxyID: proxyID,
 		}	
 	simulateMessage(message, controller, t)
 
 	if proxy.running  {
-		t.Errorf("*controllerMessage handleMessage() did not correctly stop the proxy.")
-		controller.stopProxy(proxyID)
+		t.Errorf("*ControllerMessage handleMessage() did not correctly stop the proxy.")
+		controller.StopProxy(proxyID)
 	}
 	
 }
@@ -221,20 +221,20 @@ func TestMessageDestroyProxy(t *testing.T) {
 
 	proxyJSON := []byte(`{}`)
 
-	err,proxyID := controller.addProxyFromJSON(proxyJSON)
+	err,proxyID := controller.AddProxyFromJSON(proxyJSON)
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
 	}
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_DESTROY_PROXY,
 		ProxyID: proxyID,
 		}	
 	simulateMessage(message, controller, t)
 
-	_, err = controller.getProxy(proxyID)
+	_, err = controller.GetProxy(proxyID)
 	if err == nil  {
-		t.Errorf("*controllerMessage handleMessage() did not correctly destroy the proxy.")
+		t.Errorf("*ControllerMessage handleMessage() did not correctly destroy the proxy.")
 	}
 	
 }
@@ -246,19 +246,19 @@ func TestMessageActivateProxy(t *testing.T) {
 
 	proxyJSON := []byte(`{}`)
 
-	err,proxyID := controller.addProxyFromJSON(proxyJSON)
+	err,proxyID := controller.AddProxyFromJSON(proxyJSON)
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
 	}
 
-	proxy, err := controller.getProxy(proxyID)
+	proxy, err := controller.GetProxy(proxyID)
 	if err != nil  {
-		t.Errorf("*controllerMessage getProxy() had an error: %s",err)
+		t.Errorf("*ControllerMessage getProxy() had an error: %s",err)
 	}
 
 	proxy.active = false
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_ACTIVATE_PROXY,
 		ProxyID: proxyID,
 		}	
@@ -266,7 +266,7 @@ func TestMessageActivateProxy(t *testing.T) {
 
 
 	if proxy.active == false {
-		t.Errorf("*controllerMessage handleMessage() failed to activate proxy.")
+		t.Errorf("*ControllerMessage handleMessage() failed to activate proxy.")
 
 	}
 
@@ -278,19 +278,19 @@ func TestMessageDeactivateProxy(t *testing.T) {
 
 	proxyJSON := []byte(`{}`)
 
-	err,proxyID := controller.addProxyFromJSON(proxyJSON)
+	err,proxyID := controller.AddProxyFromJSON(proxyJSON)
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
 	}
 
-	proxy, err := controller.getProxy(proxyID)
+	proxy, err := controller.GetProxy(proxyID)
 	if err != nil  {
-		t.Errorf("*controllerMessage getProxy() had an error: %s",err)
+		t.Errorf("*ControllerMessage getProxy() had an error: %s",err)
 	}
 
 	proxy.active = true
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_DEACTIVATE_PROXY,
 		ProxyID: proxyID,
 		}	
@@ -298,7 +298,7 @@ func TestMessageDeactivateProxy(t *testing.T) {
 
 
 	if proxy.active == true {
-		t.Errorf("*controllerMessage handleMessage() failed to deactivate proxy.")
+		t.Errorf("*ControllerMessage handleMessage() failed to deactivate proxy.")
 
 	}
 }
@@ -309,11 +309,11 @@ func TestMessageListProxies(t *testing.T) {
 	proxyCount := 3
 
 	for i:=0; i < proxyCount; i++  {
-		proxy0 := makeNewProxy(controller.defaultSigner)
-		controller.addExistingProxy(proxy0)
+		proxy0 := MakeNewProxy(controller.defaultSigner)
+		controller.AddExistingProxy(proxy0)
 	}
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_LIST_PROXIES,
 		}	
 
@@ -323,25 +323,25 @@ func TestMessageListProxies(t *testing.T) {
 
 
 	if ! ProxiesFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return list of proxies.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return list of proxies.")
 	}
 
 	ProxiesObj, err := base64.StdEncoding.DecodeString(Proxies.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Proxies: %s", Proxies.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Proxies: %s", Proxies.(string))
 	}
-	decodedProxies := make(map[uint64]*proxyContext)
+	decodedProxies := make(map[uint64]*ProxyContext)
 
 	err = json.Unmarshal(ProxiesObj, &decodedProxies)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Proxies: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Proxies: %s", err)
 	}
 
 	proxiesLength := len(decodedProxies)
 	if proxiesLength != proxyCount {
-		t.Fatalf("*controllerMessage handleMessage() returned %v objects; expected %v.", proxiesLength, proxyCount)
+		t.Fatalf("*ControllerMessage handleMessage() returned %v objects; expected %v.", proxiesLength, proxyCount)
 	}
 	
 }
@@ -354,14 +354,14 @@ func TestMessageGetProxyInfo(t *testing.T) {
 	testString := "1.1.1.1"
 
 	for i := uint64(0); i < proxyCount; i++  {
-		proxy := makeNewProxy(controller.defaultSigner)
+		proxy := MakeNewProxy(controller.defaultSigner)
 		if i == proxyIDToSend {
 			proxy.ListenIP = testString
 		}
-		controller.addExistingProxy(proxy)
+		controller.AddExistingProxy(proxy)
 	}
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_GET_PROXY_INFO,
 		ProxyID: proxyIDToSend,
 		}	
@@ -372,54 +372,54 @@ func TestMessageGetProxyInfo(t *testing.T) {
 
 
 	if ! ProxyFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return Proxy.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return Proxy.")
 	}
 
 	ProxyObj, err := base64.StdEncoding.DecodeString(Proxy.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Proxy: %s", Proxy.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Proxy: %s", Proxy.(string))
 	}
-	var decodedProxy *proxyContext
+	var decodedProxy *ProxyContext
 
 	err = json.Unmarshal(ProxyObj, &decodedProxy)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Proxy: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Proxy: %s", err)
 	}
 
 	if decodedProxy.ListenIP != testString {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy with an unexpected ListenIP.  Expected %v; got: %v", testString, decodedProxy.ListenIP)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy with an unexpected ListenIP.  Expected %v; got: %v", testString, decodedProxy.ListenIP)
 	}
 
 }
 
 func TestMessageGetProxyViewerUsingSecret(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, viewer := controller.createUserSessionViewer(proxyID, user.Username)
+	err, viewer := controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
 	if (! viewer.typeIsList()) {
-		t.Errorf("controller createUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
+		t.Errorf("controller.CreateUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
 	}
 
 	viewerKey := viewer.Secret
 
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_GET_PROXY_VIEWER,
 		ProxyID: proxyID,
 		ViewerSecret: viewerKey,
@@ -430,55 +430,55 @@ func TestMessageGetProxyViewerUsingSecret(t *testing.T) {
 	ViewerString, ViewerFound := replyObj["Viewer"]
 
 	if ! ViewerFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return an existing Viewer.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return an existing Viewer.")
 	}
 
 	ViewerObj, err := base64.StdEncoding.DecodeString(ViewerString.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
 	}
 	var decodedViewer *proxySessionViewer
 
 	err = json.Unmarshal(ViewerObj, &decodedViewer)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
 	}
 
 	if decodedViewer.User == nil {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer without a user object")
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer without a user object")
 	}
 
 	if decodedViewer.User.Username != user.Username {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
 	}
 
 }
 
 func TestMessageGetProxyViewerUsingSessionKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
 	testSessionKey := "myfake-session-key.json"
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, _ := controller.createSessionViewer(proxyID, user.Username, testSessionKey)
+	err, _ := controller.CreateSessionViewer(proxyID, user.Username,  user.Password, testSessionKey)
 
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
 	
 
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_GET_PROXY_VIEWER,
 		ProxyID: proxyID,
 		SessionKey: testSessionKey,
@@ -489,64 +489,64 @@ func TestMessageGetProxyViewerUsingSessionKey(t *testing.T) {
 	ViewerString, ViewerFound := replyObj["Viewer"]
 
 	if ! ViewerFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return an existing Viewer.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return an existing Viewer.")
 	}
 
 	ViewerObj, err := base64.StdEncoding.DecodeString(ViewerString.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
 	}
 	var decodedViewer *proxySessionViewer
 
 	err = json.Unmarshal(ViewerObj, &decodedViewer)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
 	}
 
 	if decodedViewer.User == nil {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer without a user object")
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer without a user object")
 	}
 
 	if ! decodedViewer.typeIsSingle(){
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer that should have been a single session viewer but wasn't.")
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer that should have been a single session viewer but wasn't.")
 	}
 
 	if decodedViewer.User.Username != user.Username {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
 	}
 
 	if decodedViewer.SessionKey != testSessionKey {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected session key.  Expected %v; got: %v", decodedViewer.SessionKey, testSessionKey)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected session key.  Expected %v; got: %v", decodedViewer.SessionKey, testSessionKey)
 	}
 	
 }
 
 func TestMessageGetProxyViewerUsingUsername(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, viewer := controller.createUserSessionViewer(proxyID, user.Username)
+	err, viewer := controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
 	if (! viewer.typeIsList()) {
-		t.Errorf("controller createUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
+		t.Errorf("controller.CreateUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
 	}
 
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_GET_PROXY_VIEWER,
 		ProxyID: proxyID,
 		Username: user.Username,
@@ -557,55 +557,55 @@ func TestMessageGetProxyViewerUsingUsername(t *testing.T) {
 	ViewerString, ViewerFound := replyObj["Viewer"]
 
 	if ! ViewerFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return an existing Viewer.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return an existing Viewer.")
 	}
 
 	ViewerObj, err := base64.StdEncoding.DecodeString(ViewerString.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
 	}
 	var decodedViewer *proxySessionViewer
 
 	err = json.Unmarshal(ViewerObj, &decodedViewer)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
 	}
 
 	if decodedViewer.User == nil {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer without a user object")
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer without a user object")
 	}
 
 	if decodedViewer.User.Username != user.Username {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
 	}
 }
 
 func TestMessageGetProxyViewerErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, viewer := controller.createUserSessionViewer(proxyID, user.Username)
+	err, viewer := controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
 	if (! viewer.typeIsList()) {
-		t.Errorf("controller createUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
+		t.Errorf("controller.CreateUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
 	}
 
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_GET_PROXY_VIEWER,
 		ProxyID: proxyID,
 		}	
@@ -615,35 +615,35 @@ func TestMessageGetProxyViewerErrorCondition(t *testing.T) {
 	_, ErrorFound := replyObj["Error"]
 
 	if ! ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to throw error when it should have: %v", replyObj)
+		t.Fatalf("*ControllerMessage handleMessage() failed to throw error when it should have: %v", replyObj)
 	}
 
 }
 
 func TestMessageGetProxyViewersUsingSessionKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
 	testSessionKey := "myfake-session-key.json"
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, _ := controller.createSessionViewer(proxyID, user.Username, testSessionKey)
+	err, _ := controller.CreateSessionViewer(proxyID, user.Username,  user.Password, testSessionKey)
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 	
-	err, _ = controller.createSessionViewer(proxyID, user.Username, testSessionKey)
+	err, _ = controller.CreateSessionViewer(proxyID, user.Username,  user.Password, testSessionKey)
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_GET_PROXY_VIEWERS,
 		ProxyID: proxyID,
 		SessionKey: testSessionKey,
@@ -654,55 +654,55 @@ func TestMessageGetProxyViewersUsingSessionKey(t *testing.T) {
 	ViewersString, ViewersFound := replyObj["Viewers"]
 
 	if ! ViewersFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return viewers.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return viewers.")
 	}
 
 	ViewersObj, err := base64.StdEncoding.DecodeString(ViewersString.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Viewers: %s", ViewersString.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Viewers: %s", ViewersString.(string))
 	}
 	var decodedViewers []*proxySessionViewer
 
 	err = json.Unmarshal(ViewersObj, &decodedViewers)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Viewers: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Viewers: %s", err)
 	}
 
 	if len(decodedViewers) != 2 {
-		t.Fatalf("*controllerMessage handleMessage() returned the wrong number of proxy viewers")
+		t.Fatalf("*ControllerMessage handleMessage() returned the wrong number of proxy viewers")
 	}
 
 	if decodedViewers[0].User.Username != user.Username {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewers[0].User.Username)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewers[0].User.Username)
 	}
 }
 
 
 func TestMessageGetProxyViewersUsingUsername(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, _ := controller.createUserSessionViewer(proxyID, user.Username)
+	err, _ := controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
-	err, _ = controller.createUserSessionViewer(proxyID, user.Username)
+	err, _ = controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_GET_PROXY_VIEWERS,
 		ProxyID: proxyID,
 		Username: user.Username,
@@ -713,64 +713,64 @@ func TestMessageGetProxyViewersUsingUsername(t *testing.T) {
 	ViewersString, ViewersFound := replyObj["Viewers"]
 
 	if ! ViewersFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return viewers.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return viewers.")
 	}
 
 	ViewersObj, err := base64.StdEncoding.DecodeString(ViewersString.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Viewers: %s", ViewersString.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Viewers: %s", ViewersString.(string))
 	}
 	var decodedViewers []*proxySessionViewer
 
 	err = json.Unmarshal(ViewersObj, &decodedViewers)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Viewers: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Viewers: %s", err)
 	}
 
 	if len(decodedViewers) != 2 {
-		t.Fatalf("*controllerMessage handleMessage() returned the wrong number of proxy viewers")
+		t.Fatalf("*ControllerMessage handleMessage() returned the wrong number of proxy viewers")
 	}
 
 	if decodedViewers[0].User.Username != user.Username {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewers[0].User.Username)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewers[0].User.Username)
 	}
 }
 
 
 func TestMessageGetProxyViewers(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, _ := controller.createUserSessionViewer(proxyID, user.Username)
+	err, _ := controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
-	err, _ = controller.createUserSessionViewer(proxyID, user.Username)
+	err, _ = controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
-	err, _ = controller.createUserSessionViewer(proxyID, user.Username)
+	err, _ = controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 	
-	err, _ = controller.createUserSessionViewer(proxyID, user.Username)
+	err, _ = controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_GET_PROXY_VIEWERS,
 		ProxyID: proxyID,
 		}	
@@ -780,28 +780,28 @@ func TestMessageGetProxyViewers(t *testing.T) {
 	ViewersString, ViewersFound := replyObj["Viewers"]
 
 	if ! ViewersFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return viewers.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return viewers.")
 	}
 
 	ViewersObj, err := base64.StdEncoding.DecodeString(ViewersString.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Viewers: %s", ViewersString.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Viewers: %s", ViewersString.(string))
 	}
 	var decodedViewers []*proxySessionViewer
 
 	err = json.Unmarshal(ViewersObj, &decodedViewers)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Viewers: %s - for string `%s`", err, ViewersObj)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Viewers: %s - for string `%s`", err, ViewersObj)
 	}
 
 	if len(decodedViewers) != 4 {
-		t.Fatalf("*controllerMessage handleMessage() returned the wrong number of proxy viewers")
+		t.Fatalf("*ControllerMessage handleMessage() returned the wrong number of proxy viewers")
 	}
 
 	if decodedViewers[0].User.Username != user.Username {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewers[0].User.Username)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewers[0].User.Username)
 	}
 }
 
@@ -809,18 +809,18 @@ func TestMessageGetProxyViewers(t *testing.T) {
 
 func TestMessageCreateNewSessionProxyViewer(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 	testSessionKey := "myfake-session-key.json"
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_NEW_PROXY_VIEWER,
 		ProxyID: proxyID,
 		Username: user.Username,
@@ -832,53 +832,53 @@ func TestMessageCreateNewSessionProxyViewer(t *testing.T) {
 	ViewerString, ViewerFound := replyObj["Viewer"]
 
 	if ! ViewerFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return an existing Viewer.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return an existing Viewer.")
 	}
 
 	ViewerObj, err := base64.StdEncoding.DecodeString(ViewerString.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
 	}
 	var decodedViewer *proxySessionViewer
 
 	err = json.Unmarshal(ViewerObj, &decodedViewer)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
 	}
 
 	if ! decodedViewer.typeIsSingle(){
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer that should have been a single session viewer but wasn't.")
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer that should have been a single session viewer but wasn't.")
 	}
 
 	if decodedViewer.User == nil {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer without a user object")
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer without a user object")
 	}
 
 	if decodedViewer.User.Username != user.Username {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
 	}
 
 	if decodedViewer.SessionKey != testSessionKey {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected session key.  Expected %v; got: %v", decodedViewer.SessionKey, testSessionKey)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected session key.  Expected %v; got: %v", decodedViewer.SessionKey, testSessionKey)
 	}
 }
 
 
 func TestMessageCreateNewUserProxyViewer(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_NEW_PROXY_VIEWER,
 		ProxyID: proxyID,
 		Username: user.Username,
@@ -889,32 +889,32 @@ func TestMessageCreateNewUserProxyViewer(t *testing.T) {
 	ViewerString, ViewerFound := replyObj["Viewer"]
 
 	if ! ViewerFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to return an existing Viewer.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to return an existing Viewer.")
 	}
 
 	ViewerObj, err := base64.StdEncoding.DecodeString(ViewerString.(string))
 
 	if (err != nil ) {
-		t.Fatalf("*controllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
+		t.Fatalf("*ControllerMessage handleMessage() returned a non-binary object in Viewer: %s", ViewerString.(string))
 	}
 	var decodedViewer *proxySessionViewer
 
 	err = json.Unmarshal(ViewerObj, &decodedViewer)
 
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
+		t.Fatalf("*ControllerMessage handleMessage() returned an invalid json object for Viewer: %s", err)
 	}
 
 	if decodedViewer.User == nil {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer without a user object")
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer without a user object")
 	}
 
 	if ! decodedViewer.typeIsList(){
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer that should have been a user session viewer but wasn't.")
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer that should have been a user session viewer but wasn't.")
 	}
 
 	if decodedViewer.User.Username != user.Username {
-		t.Fatalf("*controllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
+		t.Fatalf("*ControllerMessage handleMessage() returned a proxy viewer with an unexpected username.  Expected %v; got: %v", user.Username, decodedViewer.User.Username)
 	}
 
 }
@@ -922,17 +922,17 @@ func TestMessageCreateNewUserProxyViewer(t *testing.T) {
 
 func TestMessageCreateNewViewerErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_NEW_PROXY_VIEWER,
 		ProxyID: proxyID,
 		}	
@@ -942,16 +942,16 @@ func TestMessageCreateNewViewerErrorCondition(t *testing.T) {
 	_, ErrorFound := replyObj["Error"]
 
 	if ! ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to throw error when it should have: %v", replyObj)
+		t.Fatalf("*ControllerMessage handleMessage() failed to throw error when it should have: %v", replyObj)
 	}
 
 }
 
 func TestMessageAddProxyUser(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
@@ -959,7 +959,7 @@ func TestMessageAddProxyUser(t *testing.T) {
 		RemotePassword: "password"}
 	expectedKey := user.Username + ":" + user.Password
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_ADD_PROXY_USER,
 		ProxyID: proxyID,
 		ProxyUser: user,
@@ -970,27 +970,27 @@ func TestMessageAddProxyUser(t *testing.T) {
 	ErrorString, ErrorFound := replyObj["Error"]
 
 	if ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
+		t.Fatalf("*ControllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
 	}
 
 	UserKey, UserKeyFound := replyObj["UserKey"]
 
 	if ! UserKeyFound {
-		t.Fatalf("*controllerMessage handleMessage() did not return a UserKey when it should have.")
+		t.Fatalf("*ControllerMessage handleMessage() did not return a UserKey when it should have.")
 	}
 
 	if UserKey != expectedKey {
-		t.Errorf("*controllerMessage handleMessage() did not return expected UserKey. Expected %v, got %v", expectedKey, UserKey)
+		t.Errorf("*ControllerMessage handleMessage() did not return expected UserKey. Expected %v, got %v", expectedKey, UserKey)
 	}
 
 }
 
 func TestMessageAddProxyUserErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_ADD_PROXY_USER,
 		ProxyID: proxyID,
 		}	
@@ -1000,24 +1000,24 @@ func TestMessageAddProxyUserErrorCondition(t *testing.T) {
 	_, ErrorFound := replyObj["Error"]
 
 	if ! ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() did not throw an error when it should have: %v", replyObj)
+		t.Fatalf("*ControllerMessage handleMessage() did not throw an error when it should have: %v", replyObj)
 	}
 
 }
 
 func TestMessageRemoveProxyUser(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_REMOVE_PROXY_USER,
 		ProxyID: proxyID,
 		Username: user.Username,
@@ -1029,11 +1029,11 @@ func TestMessageRemoveProxyUser(t *testing.T) {
 	ErrorString, ErrorFound := replyObj["Error"]
 
 	if ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
+		t.Fatalf("*ControllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
 	}
 
 	if len(proxy.Users) != 0 {
-		t.Errorf("*controllerMessage handleMessage() failed to remove proxy user.")
+		t.Errorf("*ControllerMessage handleMessage() failed to remove proxy user.")
 	}
 
 }
@@ -1041,17 +1041,17 @@ func TestMessageRemoveProxyUser(t *testing.T) {
 
 func TestMessageAddChannelFilter(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_ADD_CHANNEL_FILTER,
 		ProxyID: proxyID,
 		FindString: []byte("ls"),
@@ -1065,21 +1065,21 @@ func TestMessageAddChannelFilter(t *testing.T) {
 	ErrorString, ErrorFound := replyObj["Error"]
 
 	if ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
+		t.Fatalf("*ControllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
 	}
 
 	_, FilterKeyFound := replyObj["FilterKey"]
 
 	if ! FilterKeyFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to provide a FilterKey: %v", replyObj)
+		t.Fatalf("*ControllerMessage handleMessage() failed to provide a FilterKey: %v", replyObj)
 	}
 
 	if user.channelFilters == nil {
-		t.Fatalf("*controllerMessage handleMessage() failed to populate user's channelFilters.")
+		t.Fatalf("*ControllerMessage handleMessage() failed to populate user's channelFilters.")
 	}
 
 	if len(user.channelFilters) == 0 {
-		t.Errorf("*controllerMessage handleMessage() failed to populate user's channelFilters.")
+		t.Errorf("*ControllerMessage handleMessage() failed to populate user's channelFilters.")
 	}
 
 	fn := user.channelFilters[0].fn
@@ -1088,17 +1088,17 @@ func TestMessageAddChannelFilter(t *testing.T) {
 	expectedData := "this is a test;\nexit\n"
 
 	if outData != expectedData {
-		t.Errorf("*controllerMessage handleMessage() filter function failed to perform as expected. got `%s`, wanted `%s`.", outData, expectedData)
+		t.Errorf("*ControllerMessage handleMessage() filter function failed to perform as expected. got `%s`, wanted `%s`.", outData, expectedData)
 	}
 
 }
 
 func TestMessageAddChannelFilterErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_ADD_CHANNEL_FILTER,
 		ProxyID: proxyID,
 		FindString: []byte("ls"),
@@ -1110,33 +1110,33 @@ func TestMessageAddChannelFilterErrorCondition(t *testing.T) {
 	_, ErrorFound := replyObj["Error"]
 
 	if ! ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() did not throw an error when it should have: %v", replyObj)
+		t.Fatalf("*ControllerMessage handleMessage() did not throw an error when it should have: %v", replyObj)
 	}
 }
 
 func TestMessageRemoveChannelFilter(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, key := controller.addChannelFilterToUser(proxyID, user.Username, user.Password, &channelFilterFunc{fn: 
+	err, key := controller.AddChannelFilterToUser(proxyID, user.Username, user.Password, &ChannelFilterFunc{fn: 
 		func(in_data []byte, wrapper *channelWrapper) []byte {
 			return in_data
 		}})
 	
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() called addChannelFilterToUser() and it threw an unexpected error: %s",err)
+		t.Fatalf("*ControllerMessage handleMessage() called addChannelFilterToUser() and it threw an unexpected error: %s",err)
 	}
 
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_REMOVE_CHANNEL_FILTER,
 		FilterKey: key,
 		Username: user.Username,
@@ -1148,21 +1148,21 @@ func TestMessageRemoveChannelFilter(t *testing.T) {
 	ErrorString, ErrorFound := replyObj["Error"]
 
 	if ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
+		t.Fatalf("*ControllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
 	}
 
 	if _, ok := controller.channelFilters[key]; ok {
-		t.Fatalf("*controllerMessage handleMessage() failed to remove filter from user: %s", key)
+		t.Fatalf("*ControllerMessage handleMessage() failed to remove filter from user: %s", key)
 	}
 
 }
 
 func TestMessageRemoveChannelFilterErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_REMOVE_CHANNEL_FILTER,
 		ProxyID: proxyID,
 		}	
@@ -1172,7 +1172,7 @@ func TestMessageRemoveChannelFilterErrorCondition(t *testing.T) {
 	_, ErrorFound := replyObj["Error"]
 
 	if ! ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() did not throw an error when it should have: %v", replyObj)
+		t.Fatalf("*ControllerMessage handleMessage() did not throw an error when it should have: %v", replyObj)
 	}
 }
 
@@ -1200,17 +1200,17 @@ func TestMessageAddUserCallback(t *testing.T) {
 
 	defer callbackServer.Close()
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_ADD_USER_CALLBACK,
 		ProxyID: proxyID,
 		FindString: []byte("ls"),
@@ -1224,32 +1224,32 @@ func TestMessageAddUserCallback(t *testing.T) {
 	ErrorString, ErrorFound := replyObj["Error"]
 
 	if ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
+		t.Fatalf("*ControllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
 	}
 
 	_, CallbackKeyFound := replyObj["CallbackKey"]
 
 	if ! CallbackKeyFound {
-		t.Fatalf("*controllerMessage handleMessage() failed to provide a CallbackKey: %v", replyObj)
+		t.Fatalf("*ControllerMessage handleMessage() failed to provide a CallbackKey: %v", replyObj)
 	}
 
-	if user.eventCallbacks == nil {
-		t.Fatalf("*controllerMessage handleMessage() failed to populate user's eventCallbacks.")
+	if user.EventCallbacks == nil {
+		t.Fatalf("*ControllerMessage handleMessage() failed to populate user's EventCallbacks.")
 	}
 
-	if len(user.eventCallbacks) == 0 {
-		t.Errorf("*controllerMessage handleMessage() failed to populate user's eventCallbacks.")
+	if len(user.EventCallbacks) == 0 {
+		t.Errorf("*ControllerMessage handleMessage() failed to populate user's EventCallbacks.")
 	}
 
-	fn := user.eventCallbacks[0].handler
+	fn := user.EventCallbacks[0].handler
 
-	event := sessionEvent{Type: EVENT_MESSAGE, Data: []byte("this is a test;\nls\n")}
+	event := SessionEvent{Type: EVENT_MESSAGE, Data: []byte("this is a test;\nls\n")}
 	fn(event)
 	
 
 	// check if web server got reply
 	if callback.triggered != true {
-		t.Errorf("*controllerMessage handleMessage() callback function failed to callback as expected")
+		t.Errorf("*ControllerMessage handleMessage() callback function failed to callback as expected")
 	}
 
 }
@@ -1258,24 +1258,24 @@ func TestMessageAddUserCallback(t *testing.T) {
 
 func TestMessageRemoveUserCallback(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, key := controller.addEventCallbackToUser(proxyID, user.Username, user.Password, &eventCallback{})
+	err, key := controller.AddEventCallbackToUser(proxyID, user.Username, user.Password, &EventCallback{})
 	
 	if err != nil {
-		t.Fatalf("*controllerMessage handleMessage() called addCallbackToUser() and it threw an unexpected error: %s",err)
+		t.Fatalf("*ControllerMessage handleMessage() called addCallbackToUser() and it threw an unexpected error: %s",err)
 	}
 
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_REMOVE_USER_CALLBACK,
 		CallbackKey: key,
 		Username: user.Username,
@@ -1287,21 +1287,21 @@ func TestMessageRemoveUserCallback(t *testing.T) {
 	ErrorString, ErrorFound := replyObj["Error"]
 
 	if ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
+		t.Fatalf("*ControllerMessage handleMessage() threw an unexpected error: %v", ErrorString)
 	}
 
-	if _, ok := controller.eventCallbacks[key]; ok {
-		t.Fatalf("*controllerMessage handleMessage() failed to remove filter from user: %s", key)
+	if _, ok := controller.EventCallbacks[key]; ok {
+		t.Fatalf("*ControllerMessage handleMessage() failed to remove filter from user: %s", key)
 	}
 
 }
 
 func TestMessageRemoveUserCallbackErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
 
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_REMOVE_USER_CALLBACK,
 		ProxyID: proxyID,
 		}	
@@ -1311,6 +1311,6 @@ func TestMessageRemoveUserCallbackErrorCondition(t *testing.T) {
 	_, ErrorFound := replyObj["Error"]
 
 	if ! ErrorFound {
-		t.Fatalf("*controllerMessage handleMessage() did not throw an error when it should have: %v", replyObj)
+		t.Fatalf("*ControllerMessage handleMessage() did not throw an error when it should have: %v", replyObj)
 	}
 }

@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 
 import (
@@ -33,7 +33,7 @@ type session_info struct {
 	Secret		string `json:"secret,omitempty"`
 }
 
-func buildWebSessionInfoList(sessions map[string]*sessionContext, sessions_keys []string, user string, secret string) []session_info {
+func buildWebSessionInfoList(sessions map[string]*SessionContext, sessions_keys []string, user string, secret string) []session_info {
 	session_list := make([]session_info, len(sessions_keys))
 	//log.Printf("%v,%v,%v\n",len(sessions_keys),sessions_keys,sessions)
 	for index := 0; index < len(sessions_keys); index ++ {
@@ -62,7 +62,7 @@ func buildWebSessionInfoList(sessions map[string]*sessionContext, sessions_keys 
 func (server *proxyWebServer) getUserSessionInfo(viewer *proxySessionViewer) []session_info {
 	sessions, sessions_keys := viewer.getSessions()
 
-	return buildWebSessionInfoList(sessions, sessions_keys, viewer.User.getKey(), viewer.Secret)
+	return buildWebSessionInfoList(sessions, sessions_keys, viewer.User.GetKey(), viewer.Secret)
 }
 
 func (server *proxyWebServer) getAllSessionInfo(active_only bool) []session_info {
@@ -81,6 +81,7 @@ func (server *proxyWebServer) getAllSessionInfo(active_only bool) []session_info
 	
 }
 
+/*
 func send_window_update(rows uint32, columns uint32,  conn * websocket.Conn){
 
 	msg := window_message{Rows:int64(rows), Columns: int64(columns), Type: "window-size"}
@@ -106,9 +107,9 @@ func send_window_update(rows uint32, columns uint32,  conn * websocket.Conn){
 	}
 
 }
+*/
 
-
-func send_latest_events(prev_index int, new_index int, conn * websocket.Conn, events []*sessionEvent){
+func send_latest_events(prev_index int, new_index int, conn * websocket.Conn, events []*SessionEvent){
 
 	for _, event := range events[prev_index:new_index] {
 		data, err := json.Marshal(event)
@@ -140,7 +141,7 @@ func (server *proxyWebServer) sessionViewerSocketGet(conn * websocket.Conn) {
 		log.Println("Error during message reading:", err)
 		return
 	}
-	viewer := server.proxy.getSessionViewer(string(viewerKey))
+	viewer := server.proxy.GetSessionViewer(string(viewerKey))
 	if viewer == nil {
 		log.Printf("couldn't find viewer with key:%v\n", "|"+string(viewerKey)+"|")
 		return
@@ -168,7 +169,7 @@ func (server *proxyWebServer) sessionViewerSocketList(conn * websocket.Conn) {
 		log.Println("Error during message reading:", err)
 		return
 	}
-	viewer := server.proxy.getSessionViewer(string(viewerKey))
+	viewer := server.proxy.GetSessionViewer(string(viewerKey))
 	if viewer == nil {
 		log.Printf("couldn't find viewer with key:%v\n", "|"+string(viewerKey)+"|")
 		return
@@ -181,12 +182,12 @@ func (server *proxyWebServer) sessionViewerSocketList(conn * websocket.Conn) {
 	err = conn.WriteMessage(websocket.TextMessage,sessions_json)	
 }
 
-func playSession(conn *websocket.Conn, session *sessionContext) {
+func playSession(conn *websocket.Conn, session *SessionContext) {
 	last_event_index := 0
 	new_event_index := len(session.events)
 	fmt.Println("found session")
-	client_signal :=  session.makeNewSignal()
-	defer session.removeSignal(client_signal)
+	client_signal :=  session.MakeNewSignal()
+	defer session.RemoveSignal(client_signal)
 	fmt.Println("have signal")
 	//send_window_update(session.term_rows,session.term_cols, conn)
 	send_latest_events(last_event_index, 
@@ -196,7 +197,7 @@ func playSession(conn *websocket.Conn, session *sessionContext) {
 	for true {
 		switch <-client_signal {
 			case SIGNAL_SESSION_END:
-				fmt.Println("session ended")
+				fmt.Println("session.proxy.Session.ended")
 				return
 			case SIGNAL_NEW_MESSAGE: 
 				fmt.Println("new message signal")
@@ -325,6 +326,8 @@ var upgrader = websocket.Upgrader{
 	CheckOrigin: originChecker,
 } // use default options
 
+
+/*
 // TODO: make the session folder and the html server folders consistent
 // with the proxy parameters 
 func (server *proxyWebServer) ServeWebSocketSessionServer() {
@@ -345,10 +348,10 @@ func (server *proxyWebServer) ServeWebSocketSessionServer() {
 		http.ListenAndServe(host, nil)
 	}
     
-}
+}*/
 
 type proxyWebServer struct {
-	proxy	*proxyContext
+	proxy	*ProxyContext
 	listenHost	string
 	BaseURI		string
 }

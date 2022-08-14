@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 
 import (
@@ -14,7 +14,7 @@ const EVENT_MESSAGE	 		string = "new-message"
 
 
 
-type sessionEvent struct {
+type SessionEvent struct {
 	Type 			string 		`json:"type"`
 	Key  			string     	`json:"key,omitempty"`
 	StartTime		int64 		`json:"start,omitempty"`
@@ -38,7 +38,7 @@ type sessionEvent struct {
 	RequestID		int			`json:"request_id,omitempty"`
 }
 
-func (event *sessionEvent) toJSON() string {
+func (event *SessionEvent) ToJSON() string {
 	data, err := json.Marshal(*event)
 	if err != nil {
 		data = []byte("")
@@ -46,23 +46,23 @@ func (event *sessionEvent) toJSON() string {
 	return string(data)
 }
 
-func (context * sessionContext) getStartTimeAsUnix() int64 {
+func (context * SessionContext) getStartTimeAsUnix() int64 {
 	return context.start_time.Unix()
 }
 
-func (context * sessionContext) getStopTimeAsUnix() int64 {
+func (context * SessionContext) getStopTimeAsUnix() int64 {
 	return context.start_time.Unix()
 }
 
-func (session * sessionContext) addEvent(event *sessionEvent) *sessionEvent{
-	event.TimeOffset = session.getTimeOffset()
+func (session * SessionContext) AddEvent(event *SessionEvent) *SessionEvent{
+	event.TimeOffset = session.GetTimeOffset()
 	session.event_mutex.Lock()
 	session.events = append(session.events, event)
 	session.event_mutex.Unlock()
 	return event
 }
 
-func (session * sessionContext) logEvent(event *sessionEvent) {
+func (session * SessionContext) LogEvent(event *SessionEvent) {
 	json_data, err := json.Marshal(event)
 	if err != nil {
 		session.proxy.log.Println("Error during marshaling json: ", err)
@@ -79,10 +79,10 @@ func (session * sessionContext) logEvent(event *sessionEvent) {
 	session.appendToLog(data)
 }
 
-func (session * sessionContext) handleEvent(event *sessionEvent) {
-	go func(session * sessionContext, event *sessionEvent) {
-		if(session.user.eventCallbacks != nil)	{
-			for _, callback := range session.user.eventCallbacks  {
+func (session * SessionContext) HandleEvent(event *SessionEvent) {
+	go func(session * SessionContext, event *SessionEvent) {
+		if(session.user.EventCallbacks != nil)	{
+			for _, callback := range session.user.EventCallbacks  {
 				if callback.events != nil {
 					if triggerEvent, ok :=  callback.events[event.Type]; ok {
 						if triggerEvent {
@@ -93,19 +93,19 @@ func (session * sessionContext) handleEvent(event *sessionEvent) {
 			}
 		}
 	}(session,event)
-	updated_event := session.addEvent(event)
-	session.logEvent(updated_event)
+	updated_event := session.AddEvent(event)
+	session.LogEvent(updated_event)
 	session.signalNewMessage()
 }
 
-type eventCallbackFunc func(sessionEvent)
+type EventCallbackFunc func(SessionEvent)
 
-type eventCallback struct {
+type EventCallback struct {
 	events map[string]bool
-	handler eventCallbackFunc
+	handler EventCallbackFunc
 }
 
-type channelFilterFunc	struct {
+type ChannelFilterFunc	struct {
 	fn func([]byte, *channelWrapper) []byte
 }
 // has to be hooked in the reader

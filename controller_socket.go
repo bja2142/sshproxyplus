@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 
 import (
@@ -12,7 +12,7 @@ import (
 )
 
 
-type proxyControllerSocketTCP struct {
+type ProxyControllerSocketTCP struct {
 	listener net.Listener
 	active	bool
 	clients []net.Conn
@@ -22,13 +22,13 @@ type proxyControllerSocketTCP struct {
 	plaintext	bool
 }
 
-type proxyControllerSocketTCPClient struct {
+type ProxyControllerSocketTCPClient struct {
 	net.Conn
 }
 
 
 
-func (client *proxyControllerSocketTCPClient) 	SendLine(data []byte) error {
+func (client *ProxyControllerSocketTCPClient) 	SendLine(data []byte) error {
 	_, err := client.Write(data)
 	if(err != nil)	{
 		fmt.Println("Error writing to plain socket: ", err.Error())
@@ -36,14 +36,14 @@ func (client *proxyControllerSocketTCPClient) 	SendLine(data []byte) error {
 	return err
 }
 
-func (client *proxyControllerSocketTCPClient) 	ReadLine() ([]byte, error) {
+func (client *ProxyControllerSocketTCPClient) 	ReadLine() ([]byte, error) {
 	reader := bufio.NewReader(client)
 	return reader.ReadBytes('\n')
 } 
 
 
 
-func (socket *proxyControllerSocketTCP) ListenAndServe(host string, handler proxyControllerSocketHandler) error {
+func (socket *ProxyControllerSocketTCP) ListenAndServe(host string, handler ProxyControllerSocketHandler) error {
 	var err error
 	if(socket.plaintext) {
 		socket.listener, err = net.Listen("tcp", host)
@@ -76,9 +76,9 @@ func (socket *proxyControllerSocketTCP) ListenAndServe(host string, handler prox
 			socket.clientMutex.Lock()
 				socket.clients = append(socket.clients, client)
 			socket.clientMutex.Unlock()
-			go func(client net.Conn, socket *proxyControllerSocketTCP) {
+			go func(client net.Conn, socket *ProxyControllerSocketTCP) {
 				defer socket.clientClose(client)
-				handler(&proxyControllerSocketTCPClient{client},socket)	
+				handler(&ProxyControllerSocketTCPClient{client},socket)	
 			}(client,socket)
 			
 		}
@@ -86,7 +86,7 @@ func (socket *proxyControllerSocketTCP) ListenAndServe(host string, handler prox
 	return nil
 }
 
-func (socket *proxyControllerSocketTCP) clientClose(client net.Conn) {
+func (socket *ProxyControllerSocketTCP) clientClose(client net.Conn) {
 	socket.clientMutex.Lock()
 		for index, curClient := range socket.clients {
 			if curClient == client {
@@ -102,7 +102,7 @@ func (socket *proxyControllerSocketTCP) clientClose(client net.Conn) {
 	socket.clientMutex.Unlock()
 }
 
-func (socket *proxyControllerSocketTCP) Stop() {
+func (socket *ProxyControllerSocketTCP) Stop() {
 
 
 	if(socket.active) {
@@ -116,25 +116,25 @@ func (socket *proxyControllerSocketTCP) Stop() {
 	}
 }
 
-func (socket *proxyControllerSocketTCP) IsPlaintext() bool {
+func (socket *ProxyControllerSocketTCP) IsPlaintext() bool {
 	return socket.plaintext
 }
 
 
-type proxyControllerSocketWeb struct {
+type ProxyControllerSocketWeb struct {
 	TLSCert		   	string
 	TLSKey			string
 	plaintext		bool
-	handler 		proxyControllerSocketHandler
+	handler 		ProxyControllerSocketHandler
 	server			http.Server
 	active			bool
 }
 
-type proxyControllerSocketWebClient struct {
+type ProxyControllerSocketWebClient struct {
 	websocket.Conn
 }
 
-func (client *proxyControllerSocketWebClient) SendLine(data []byte) error {
+func (client *ProxyControllerSocketWebClient) SendLine(data []byte) error {
 	err := client.WriteMessage(websocket.TextMessage,data)
 	if(err != nil)	{
 		fmt.Println("Error writing to web socket: ", err.Error())
@@ -142,7 +142,7 @@ func (client *proxyControllerSocketWebClient) SendLine(data []byte) error {
 	return err
 }
 
-func (client *proxyControllerSocketWebClient) ReadLine() ([]byte, error) {
+func (client *ProxyControllerSocketWebClient) ReadLine() ([]byte, error) {
 	_, data, err := client.ReadMessage()
 	if err != nil {
 		fmt.Println("Error reading from web socket:", err.Error())
@@ -150,7 +150,7 @@ func (client *proxyControllerSocketWebClient) ReadLine() ([]byte, error) {
 	return data, err
 } 
 
-func (socket *proxyControllerSocketWeb) handleWebRequest(writer http.ResponseWriter, reader *http.Request) {
+func (socket *ProxyControllerSocketWeb) handleWebRequest(writer http.ResponseWriter, reader *http.Request) {
 	var upgrader = websocket.Upgrader{
 		CheckOrigin: socket.originChecker,
 	}
@@ -160,16 +160,16 @@ func (socket *proxyControllerSocketWeb) handleWebRequest(writer http.ResponseWri
         return
     }
     defer client.Close()
-	socket.handler(&proxyControllerSocketWebClient{*client},socket)	
+	socket.handler(&ProxyControllerSocketWebClient{*client},socket)	
 }
 
-func (socket *proxyControllerSocketWeb) originChecker(r *http.Request) bool {
+func (socket *ProxyControllerSocketWeb) originChecker(r *http.Request) bool {
 	fmt.Printf("%v\n",r.Header.Get("Origin"))
 	return true
 	//TODO: verify origin
 }
 
-func (socket *proxyControllerSocketWeb) ListenAndServe(host string, handler proxyControllerSocketHandler) error {
+func (socket *ProxyControllerSocketWeb) ListenAndServe(host string, handler ProxyControllerSocketHandler) error {
 	var err error
 	socket.handler = handler
 	serverMux := http.NewServeMux()
@@ -180,6 +180,9 @@ func (socket *proxyControllerSocketWeb) ListenAndServe(host string, handler prox
 		Addr:	host,
 	}
 
+
+	socket.active = true
+
 	if(socket.plaintext) {
 		err = socket.server.ListenAndServe()
 	} else {
@@ -189,35 +192,35 @@ func (socket *proxyControllerSocketWeb) ListenAndServe(host string, handler prox
 	
 	if (err != nil)	{
 		fmt.Println("Error creating web server:",err.Error())
+		socket.active = false
 		return err
 	}
 
-	socket.active = true
 	
 	return nil
 }
 
-func (socket *proxyControllerSocketWeb) Stop() {
+func (socket *ProxyControllerSocketWeb) Stop() {
 	if(socket.active) {
 		socket.active = false
 		socket.server.Close()
 	}
 }
 
-func (socket *proxyControllerSocketWeb) IsPlaintext() bool {
+func (socket *ProxyControllerSocketWeb) IsPlaintext() bool {
 	return socket.plaintext
 }
 
 
-type proxyControllerSocketHandler func(proxyControllerSocketClient, proxyControllerSocket)
+type ProxyControllerSocketHandler func(ProxyControllerSocketClient, ProxyControllerSocket)
 
-type proxyControllerSocketClient interface {
+type ProxyControllerSocketClient interface {
 	SendLine(data []byte) error
 	ReadLine() ([]byte, error)
 }
 
-type proxyControllerSocket interface {
-	ListenAndServe(host string, handler proxyControllerSocketHandler) error
+type ProxyControllerSocket interface {
+	ListenAndServe(host string, handler ProxyControllerSocketHandler) error
 	Stop()
 	IsPlaintext() bool
 }

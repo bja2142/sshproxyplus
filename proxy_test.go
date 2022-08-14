@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 	
 
@@ -29,14 +29,14 @@ func (logger testLogger) Println(v ...any) {
 	logger.messages = append(logger.messages, fmt.Sprintln(v...) )
 }
 
-func makeNewTestProxy() *proxyContext {
+func makeNewTestProxy() *ProxyContext {
 
 	
-	return &proxyContext{
+	return &ProxyContext{
 		log: log.Default(),
-		Users: map[string]*proxyUser{},
-		userSessions: map[string]map[string]*sessionContext{},
-		allSessions: map[string]*sessionContext{},
+		Users: map[string]*ProxyUser{},
+		userSessions: map[string]map[string]*SessionContext{},
+		allSessions: map[string]*SessionContext{},
 		Viewers: map[string]*proxySessionViewer{},
 		DefaultRemotePort: 22,
 		DefaultRemoteIP: "127.0.0.1",
@@ -49,8 +49,8 @@ func makeNewTestProxy() *proxyContext {
 	}
 }
 
-func makeNewTestProxyUser() *proxyUser {
-	return &proxyUser{
+func makeNewTestProxyUser() *ProxyUser {
+	return &ProxyUser{
 		Username: "test", 
 		Password: "pass", 
 		RemoteHost: "remote:port", 
@@ -72,17 +72,17 @@ func TestAuthenticateUserDefault(t *testing.T) {
 	test_pass := expected_pass
 
 
-	expected_host := proxy.getDefaultRemoteHost()
+	expected_host := proxy.GetDefaultRemoteHost()
 
-	err, user := proxy.authenticateUser(test_user,test_pass)
+	err, user := proxy.AuthenticateUser(test_user,test_pass)
 
 
 	if err != nil || user == nil {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid proxyUser object`, test_user,test_pass, user, err)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid ProxyUser object`, test_user,test_pass, user, err)
     }
 
 	if user.RemoteHost != expected_host || user.RemoteUsername != expected_user || user.RemotePassword != expected_pass {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want proxyUser object to have host, user, pass values %v, %v, %v`, test_user,test_pass, user, err,expected_host, expected_user, expected_pass)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want ProxyUser object to have host, user, pass values %v, %v, %v`, test_user,test_pass, user, err,expected_host, expected_user, expected_pass)
     }
 }
 
@@ -100,17 +100,17 @@ func TestAuthenticateUserAnyValue(t *testing.T) {
 	test_pass := "literally_anything"
 
 
-	expected_host := proxy.getDefaultRemoteHost()
+	expected_host := proxy.GetDefaultRemoteHost()
 	
-	err, user := proxy.authenticateUser(test_user,test_pass)
+	err, user := proxy.AuthenticateUser(test_user,test_pass)
 
 
 	if err != nil || user == nil {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid proxyUser object`, test_user,test_pass, user, err)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid ProxyUser object`, test_user,test_pass, user, err)
     }
 
 	if user.RemoteHost != expected_host || user.RemoteUsername != expected_user || user.RemotePassword != expected_pass {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want proxyUser object to have host, user, pass values %v, %v, %v`, test_user,test_pass, user, err,expected_host, expected_user, expected_pass)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want ProxyUser object to have host, user, pass values %v, %v, %v`, test_user,test_pass, user, err,expected_host, expected_user, expected_pass)
     }
 }
 
@@ -128,17 +128,17 @@ func TestAuthenticateUserAnyUserBlankPassword(t *testing.T) {
 	test_pass := ""
 
 
-	expected_host := proxy.getDefaultRemoteHost()
+	expected_host := proxy.GetDefaultRemoteHost()
 	
-	err, user := proxy.authenticateUser(test_user,test_pass)
+	err, user := proxy.AuthenticateUser(test_user,test_pass)
 
 
 	if err != nil || user == nil {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid proxyUser object`, test_user,test_pass, user, err)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid ProxyUser object`, test_user,test_pass, user, err)
     }
 
 	if user.RemoteHost != expected_host || user.RemoteUsername != expected_user || user.RemotePassword != expected_pass {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want proxyUser object to have host, user, pass values %v, %v, %v`, test_user,test_pass, user, err,expected_host, expected_user, expected_pass)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want ProxyUser object to have host, user, pass values %v, %v, %v`, test_user,test_pass, user, err,expected_host, expected_user, expected_pass)
     }
 }
 
@@ -155,17 +155,17 @@ func TestAuthenticateUserAuthorized(t *testing.T) {
 
 	expected_host := proxy_user.RemoteHost
 
-	proxy.addProxyUser(proxy_user)
+	proxy.AddProxyUser(proxy_user)
 
-	err, user := proxy.authenticateUser(test_user,test_pass)
+	err, user := proxy.AuthenticateUser(test_user,test_pass)
 
 
 	if err != nil || user == nil {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid proxyUser object`, test_user,test_pass, user, err)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid ProxyUser object`, test_user,test_pass, user, err)
     }
 
 	if user.RemoteHost != expected_host || user.RemoteUsername != expected_user || user.RemotePassword != expected_pass {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want proxyUser object to have host, user, pass values %v, %v, %v`, test_user,test_pass, user, err,expected_host, expected_user, expected_pass)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want ProxyUser object to have host, user, pass values %v, %v, %v`, test_user,test_pass, user, err,expected_host, expected_user, expected_pass)
     }
 }
 
@@ -186,28 +186,28 @@ func TestAuthenticateUsersAuthorized(t *testing.T) {
 
 	expected_host := proxy_user.RemoteHost
 
-	proxy.addProxyUser(proxy_user)
-	proxy.addProxyUser(proxy_user2)
+	proxy.AddProxyUser(proxy_user)
+	proxy.AddProxyUser(proxy_user2)
 
-	err, user := proxy.authenticateUser(test_user1,test_pass1)
+	err, user := proxy.AuthenticateUser(test_user1,test_pass1)
 
-	err2, user2 := proxy.authenticateUser(test_user2,test_pass2)
+	err2, user2 := proxy.AuthenticateUser(test_user2,test_pass2)
 
 
 	if err != nil || user == nil {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid proxyUser object`, test_user1,test_pass1, user, err)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid ProxyUser object`, test_user1,test_pass1, user, err)
     }
 
 	if user.RemoteHost != expected_host || user.RemoteUsername != expected_user || user.RemotePassword != expected_pass {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want proxyUser object to have host, user, pass values %v, %v, %v`, test_user1,test_pass1, user, err,expected_host, expected_user, expected_pass)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want ProxyUser object to have host, user, pass values %v, %v, %v`, test_user1,test_pass1, user, err,expected_host, expected_user, expected_pass)
     }
 
 	if err2 != nil || user2 == nil {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid proxyUser object`, test_user2,test_pass2, user2, err2)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want no error and a valid ProxyUser object`, test_user2,test_pass2, user2, err2)
     }
 
 	if user2.RemoteHost != expected_host || user2.RemoteUsername != expected_user || user2.RemotePassword != expected_pass {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want proxyUser object to have host, user, pass values %v, %v, %v`, test_user2,test_pass2, user2, err2,expected_host, expected_user, expected_pass)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, want ProxyUser object to have host, user, pass values %v, %v, %v`, test_user2,test_pass2, user2, err2,expected_host, expected_user, expected_pass)
     }
 }
 
@@ -224,27 +224,27 @@ func TestAuthenticateUserBlankAuthorized(t *testing.T) {
 
 	expected_host := proxy_user.RemoteHost
 
-	proxy.addProxyUser(proxy_user)
+	proxy.AddProxyUser(proxy_user)
 
 	test_pass2 := "pass"
 
-	err, user := proxy.authenticateUser(test_user1,test_pass1)
-	err2, user2 := proxy.authenticateUser(test_user1,test_pass2)
+	err, user := proxy.AuthenticateUser(test_user1,test_pass1)
+	err2, user2 := proxy.AuthenticateUser(test_user1,test_pass2)
 
 	if err != nil || user == nil {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, when giving blank password, want no error and a valid proxyUser object`, test_user1,test_pass1, user, err)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, when giving blank password, want no error and a valid ProxyUser object`, test_user1,test_pass1, user, err)
     }
 
 	if user.RemoteHost != expected_host || user.RemoteUsername != expected_user || user.RemotePassword != expected_pass {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, when giving blank password, want proxyUser object to have host, user, pass values %v, %v, %v`, test_user1,test_pass1, user, err,expected_host, expected_user, expected_pass)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, when giving blank password, want ProxyUser object to have host, user, pass values %v, %v, %v`, test_user1,test_pass1, user, err,expected_host, expected_user, expected_pass)
     }
 
 	if err2 != nil || user2 == nil {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, when giving non-blank password, want no error and a valid proxyUser object`, test_user1,test_pass2, user2, err2)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, when giving non-blank password, want no error and a valid ProxyUser object`, test_user1,test_pass2, user2, err2)
     }
 
 	if user2.RemoteHost != expected_host || user2.RemoteUsername != expected_user || user2.RemotePassword != expected_pass {
-        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, when giving non-blank password, want proxyUser object to have host, user, pass values %v, %v, %v`, test_user1,test_pass2, user2, err2,expected_host, expected_user, expected_pass)
+        t.Fatalf(`authenticateUser(%v,%v) = %v, %v, when giving non-blank password, want ProxyUser object to have host, user, pass values %v, %v, %v`, test_user1,test_pass2, user2, err2,expected_host, expected_user, expected_pass)
     }
 }
 
@@ -462,7 +462,7 @@ func TestProxy(t *testing.T) {
 // start dummy ssh server
 // https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
 	signer, err := generateSigner()
-	proxy := makeNewProxy(signer)
+	proxy := MakeNewProxy(signer)
 	proxy.DefaultRemotePort = int(dummyServer.port.Int64())
 	proxy.ListenPort =  int(newRandomPort().Int64())
 	proxy.active = true
@@ -470,7 +470,7 @@ func TestProxy(t *testing.T) {
 	// create proxy connecting to it
 
 
-	go proxy.startProxy()
+	go proxy.StartProxy()
 	time.Sleep(500*time.Millisecond)
 
 	err, testReply := sendCommandToTestServer("127.0.0.1:"+strconv.Itoa(proxy.ListenPort), testUser, testPassword, testString)
@@ -508,21 +508,273 @@ func TestProxy(t *testing.T) {
 		}
 	}
 
-	
-// make dummy ssh client
-// https://github.com/helloyi/go-sshclient
-// https://raw.githubusercontent.com/helloyi/go-sshclient/master/sshclient.go
+}
 
-// connect to proxy
-// verify remote end is connected to
-// send string through it
+func requestWindowChangeToTestServer(host, user, password string, height, width int) (error) {
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout: time.Second *3,
+	}
+	client, err :=  ssh.Dial("tcp", host, config) 
+	if err == nil {
+		defer client.Close() 
+		session, newErr := client.NewSession()
+		err = newErr
+		if err == nil {
+			defer session.Close()
+			// Set up terminal modes; from example in docs: https://pkg.go.dev/golang.org/x/crypto/ssh#Session
+			modes := ssh.TerminalModes{
+				ssh.ECHO:          0,     // disable echoing
+				ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+				ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+			}
+			// Request pseudo terminal
+			err = session.RequestPty("xterm", 50, 50, modes);
+			if err == nil {
+				time.Sleep(time.Millisecond*50)
+				err = session.WindowChange(height, width)
+				time.Sleep(time.Millisecond*50)
+			}
+		}
+	}
 
-// verify web server is able to see events occurring
-// disconnect
+	return err
+}
 
-// TODO: cleanup log files
+func requestPtyToTestServer(host, user, password string, height, width int) (error) {
+	config := &ssh.ClientConfig{
+		User: user,
+		Auth: []ssh.AuthMethod{
+			ssh.Password(password),
+		},
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout: time.Second *3,
+	}
+	client, err :=  ssh.Dial("tcp", host, config) 
+	if err == nil {
+		defer client.Close() 
+		session, newErr := client.NewSession()
+		err = newErr
+		if err == nil {
+			defer session.Close()
+			// Set up terminal modes; from example in docs: https://pkg.go.dev/golang.org/x/crypto/ssh#Session
+			modes := ssh.TerminalModes{
+				ssh.ECHO:          0,     // disable echoing
+				ssh.TTY_OP_ISPEED: 14400, // input speed = 14.4kbaud
+				ssh.TTY_OP_OSPEED: 14400, // output speed = 14.4kbaud
+			}
+			// Request pseudo terminal
+			err = session.RequestPty("xterm", height, width, modes)
+		}
+	}
+
+	return err
 }
 
 
-/// test proxy for requestPty to ensure window size matches
-/// also test with windowchange
+
+func TestProxyRequestPty(t *testing.T) {
+
+	testWidth := uint32(10)
+	testHeight := uint32(20)
+	testUser := "user"
+	testPassword := "password"
+	dummyServer := testSSHServer{
+		port: newRandomPort(),
+		t: t,
+		active: true,
+	}
+	go dummyServer.listen()
+
+	time.Sleep(500*time.Millisecond)
+	
+	defer dummyServer.stop()
+// start dummy ssh server
+// https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
+	signer, err := generateSigner()
+	proxy := MakeNewProxy(signer)
+	proxy.DefaultRemotePort = int(dummyServer.port.Int64())
+	proxy.ListenPort =  int(newRandomPort().Int64())
+	proxy.active = true
+
+	// create proxy connecting to it
+
+
+	go proxy.StartProxy()
+	time.Sleep(500*time.Millisecond)
+
+	err = requestPtyToTestServer("127.0.0.1:"+strconv.Itoa(proxy.ListenPort), testUser, testPassword, int(testHeight), int(testWidth))
+	if (err != nil) {
+		t.Errorf("Error when sending PtyRequest to proxy: %s\n", err)
+	}
+	
+	
+
+	if len(proxy.allSessions) != 1 {
+		t.Errorf("Proxy did not store session.")
+	} else {
+		for testSessionKey, _ := range proxy.allSessions {
+			testSession := proxy.allSessions[testSessionKey]
+			if testSession.term_rows != testHeight {
+				t.Errorf("Proxy session does not have expected term_rows. Expected %v, got %v", testHeight, testSession.term_rows )
+			}
+
+			if testSession.term_cols != testWidth {
+				t.Errorf("Proxy session does not have expected term_cols. Expected %v, got %v", testWidth, testSession.term_cols )
+			}
+		}
+	}
+
+	proxy.Stop()
+
+	for testSessionKey, _ := range proxy.allSessions {
+		testSession := proxy.allSessions[testSessionKey]
+		err := os.Remove(testSession.filename)
+		if err != nil {
+			log.Printf("Failed to remove file during cleanup: %s\n", err)
+		}
+	}
+
+}
+
+
+func TestProxyWindowChange(t *testing.T) {
+
+	testWidth := uint32(10)
+	testHeight := uint32(20)
+	testUser := "user"
+	testPassword := "password"
+	dummyServer := testSSHServer{
+		port: newRandomPort(),
+		t: t,
+		active: true,
+	}
+	go dummyServer.listen()
+
+	time.Sleep(500*time.Millisecond)
+	
+	defer dummyServer.stop()
+// start dummy ssh server
+// https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
+	signer, err := generateSigner()
+	proxy := MakeNewProxy(signer)
+	proxy.DefaultRemotePort = int(dummyServer.port.Int64())
+	proxy.ListenPort =  int(newRandomPort().Int64())
+	proxy.active = true
+
+	// create proxy connecting to it
+
+
+	go proxy.StartProxy()
+	time.Sleep(500*time.Millisecond)
+
+	err = requestWindowChangeToTestServer("127.0.0.1:"+strconv.Itoa(proxy.ListenPort), testUser, testPassword, int(testHeight), int(testWidth))
+	if (err != nil) {
+		t.Errorf("Error when sending window change to proxy: %s\n", err)
+	}
+	
+	
+
+	if len(proxy.allSessions) != 1 {
+		t.Errorf("Proxy did not store session.")
+	} else {
+		for testSessionKey, _ := range proxy.allSessions {
+			testSession := proxy.allSessions[testSessionKey]
+			if testSession.term_rows != testHeight {
+				t.Errorf("Proxy session does not have expected term_rows. Expected %v, got %v", testHeight, testSession.term_rows )
+			}
+
+			if testSession.term_cols != testWidth {
+				t.Errorf("Proxy session does not have expected term_cols. Expected %v, got %v", testWidth, testSession.term_cols )
+			}
+		}
+	}
+
+	proxy.Stop()
+
+	for testSessionKey, _ := range proxy.allSessions {
+		testSession := proxy.allSessions[testSessionKey]
+		err := os.Remove(testSession.filename)
+		if err != nil {
+			log.Printf("Failed to remove file during cleanup: %s\n", err)
+		}
+	}
+
+}
+
+func TestListSessionsSingle(t *testing.T) {
+	controller := makeNewController()
+	controller.InitializeSocket()
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy.PublicAccess = true
+	controller.AddExistingProxy(proxy)
+
+	testUser1 := &ProxyUser{
+		Username: "testuser1",
+		Password: "testPassword1",
+	}
+
+	testUser2 := &ProxyUser{
+		Username: "testuser2",
+		Password: "testPassword2",
+	}
+
+	proxy.AddProxyUser(testUser1)
+	proxy.AddProxyUser(testUser2)
+
+
+
+	proxySessionActiveKey := "active-session"
+	proxySessionInactiveKey := "inactive-session"
+
+	activeSession := &SessionContext{
+		proxy: proxy,
+		active: true,
+		start_time: time.Now(),
+		stop_time:time.Now(),
+		events: make([]*SessionEvent,0),
+		sessionID: proxySessionActiveKey,
+		user: testUser1,
+		msg_signal: make([]chan int,0),
+	}
+	inactiveSession :=  &SessionContext{
+		proxy: proxy,
+		active: false,
+		events: make([]*SessionEvent,0),
+		sessionID: proxySessionInactiveKey,
+		user: testUser2,
+	}
+
+	proxy.allSessions[proxySessionActiveKey] = activeSession
+	proxy.allSessions[proxySessionInactiveKey] = inactiveSession
+
+	proxy.AddSessionToUserList(activeSession)
+	proxy.AddSessionToUserList(inactiveSession)
+
+	err, viewer := proxy.MakeSessionViewerForSession(testUser1.Username, testUser1.Password,proxySessionActiveKey)
+
+	if(err != nil) {
+		t.Fatalf("Failed to create session viewer during setup: %s",err)
+	}
+
+	viewer.getSessions()
+
+	
+
+}
+
+// test with callback events
+
+// test with unsupported channels
+
+// test get proxyuser in the case to find the blank password
+
+// test get user session keys
+// test get Users
+
+
+// expired sessions

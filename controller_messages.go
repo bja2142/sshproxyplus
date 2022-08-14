@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 
 import (
@@ -11,12 +11,12 @@ import (
 	"net/http"
 )
 
-type controllerHMAC struct {
+type ControllerHMAC struct {
 	Message []byte
 	HMAC	[]byte
 }
 
-type controllerMessage struct {
+type ControllerMessage struct {
 	MessageType		string
 	ProxyData 		[]byte `json:"ProxyData,omitempty"`
 	ProxyID			uint64 `json:"omitempty"`
@@ -27,7 +27,7 @@ type controllerMessage struct {
 	FilterKey    	string `json:"omitempty"`
 	CallbackKey    	string `json:"omitempty"`
 	CallbackURL    	string `json:"omitempty"`
-	ProxyUser		*proxyUser `json:"omitempty"`
+	ProxyUser		*ProxyUser `json:"omitempty"`
 	FindString		[]byte `json:"omitempty"`
 	ReplaceString	[]byte `json:"omitempty"`
 }
@@ -54,10 +54,10 @@ const CONTROLLER_MESSAGE_REMOVE_USER_CALLBACK	string = "remove-user-callback"
 
 // - test
 
-func (messageWrapper *controllerHMAC) verify(key []byte) (error,controllerMessage) {
+func (messageWrapper *ControllerHMAC) Verify(key []byte) (error,ControllerMessage) {
 	var err error = nil
 	mac := hmac.New(sha256.New, key)
-	out_message := controllerMessage{}
+	out_message := ControllerMessage{}
 	mac.Write(messageWrapper.Message)
 	expectedMAC := mac.Sum(nil)
 	if (hmac.Equal(messageWrapper.HMAC, expectedMAC)) {
@@ -68,10 +68,10 @@ func (messageWrapper *controllerHMAC) verify(key []byte) (error,controllerMessag
 	return err, out_message
 }
 
-func (message *controllerMessage) sign(key []byte) (error,controllerHMAC) {
+func (message *ControllerMessage) Sign(key []byte) (error,ControllerHMAC) {
 	var err error = nil
 	mac := hmac.New(sha256.New, key)
-	messageWrapper := controllerHMAC{}
+	messageWrapper := ControllerHMAC{}
 	messageData, err := json.Marshal(message)
 	if (err == nil) {
 		mac.Write(messageData)
@@ -82,7 +82,7 @@ func (message *controllerMessage) sign(key []byte) (error,controllerHMAC) {
 }
 
 
-func (message *controllerMessage) handleMessage(controller *proxyController) []byte {
+func (message *ControllerMessage) HandleMessage(controller *ProxyController) []byte {
 	reply:= make(map[string]interface{})
 
 	reply["MessageType"] = message.MessageType + "-reply"
@@ -91,7 +91,7 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 	case CONTROLLER_MESSAGE_CREATE_PROXY:
 		if (message.ProxyData != nil) {
 			var newProxyID uint64 
-			err,newProxyID = controller.addProxyFromJSON(message.ProxyData)
+			err,newProxyID = controller.AddProxyFromJSON(message.ProxyData)
 			if (err == nil)	{
 				reply["ProxyID"] = newProxyID
 			}
@@ -99,15 +99,15 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 			err = errors.New("No ProxyData provided")
 		}
 	case CONTROLLER_MESSAGE_START_PROXY:
-		err = controller.startProxy(message.ProxyID)
+		err = controller.StartProxy(message.ProxyID)
 	case CONTROLLER_MESSAGE_STOP_PROXY:
-		err = controller.stopProxy(message.ProxyID)
+		err = controller.StopProxy(message.ProxyID)
 	case CONTROLLER_MESSAGE_DESTROY_PROXY:
-		err = controller.destroyProxy(message.ProxyID)
+		err = controller.DestroyProxy(message.ProxyID)
 	case CONTROLLER_MESSAGE_ACTIVATE_PROXY:
-		err = controller.activateProxy(message.ProxyID)
+		err = controller.ActivateProxy(message.ProxyID)
 	case CONTROLLER_MESSAGE_DEACTIVATE_PROXY:
-		err = controller.deactivateProxy(message.ProxyID)
+		err = controller.DeactivateProxy(message.ProxyID)
 	case CONTROLLER_MESSAGE_LIST_PROXIES:
 		var data []byte
 		data,err =json.Marshal(controller.Proxies)
@@ -115,8 +115,8 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 			reply["Proxies"] = data
 		}
 	case CONTROLLER_MESSAGE_GET_PROXY_INFO:
-		var proxy *proxyContext
-		proxy, err = controller.getProxy(message.ProxyID)
+		var proxy *ProxyContext
+		proxy, err = controller.GetProxy(message.ProxyID)
 		if (proxy != nil) {
 			var data []byte
 			data,err =json.Marshal(proxy)
@@ -127,11 +127,11 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 	case CONTROLLER_MESSAGE_GET_PROXY_VIEWER:
 		var viewer *proxySessionViewer
 		if message.ViewerSecret != "" {
-			err, viewer = controller.getProxyViewerByViewerKey(message.ProxyID, message.ViewerSecret)
+			err, viewer = controller.GetProxyViewerByViewerKey(message.ProxyID, message.ViewerSecret)
 		} else if message.SessionKey != "" {
-			err, viewer = controller.getProxyViewerBySessionKey(message.ProxyID, message.SessionKey)
+			err, viewer = controller.GetProxyViewerBySessionKey(message.ProxyID, message.SessionKey)
 		} else if message.Username != "" {
-			err, viewer = controller.getProxyViewerByUsername(message.ProxyID, message.Username)
+			err, viewer = controller.GetProxyViewerByUsername(message.ProxyID, message.Username)
 		} else {
 			err = errors.New("no viewer secret, session key, nor username provided")
 		}
@@ -145,11 +145,11 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 	case CONTROLLER_MESSAGE_GET_PROXY_VIEWERS:
 		var viewers interface{}
 		if message.SessionKey != "" {
-			err, viewers = controller.getProxyViewersBySessionKey(message.ProxyID, message.SessionKey)
+			err, viewers = controller.GetProxyViewersBySessionKey(message.ProxyID, message.SessionKey)
 		} else if message.Username != "" {
-			err, viewers = controller.getProxyViewersByUsername(message.ProxyID, message.Username)
+			err, viewers = controller.GetProxyViewersByUsername(message.ProxyID, message.Username)
 		} else {
-			err, viewers = controller.getProxyViewersAsList(message.ProxyID)			
+			err, viewers = controller.GetProxyViewersAsList(message.ProxyID)			
 		}
 		if err == nil {
 			var data []byte
@@ -162,9 +162,9 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 		var viewer *proxySessionViewer
 		if message.Username != "" {
 			if message.SessionKey != "" {
-				err, viewer = controller.createSessionViewer(message.ProxyID, message.Username, message.SessionKey)
+				err, viewer = controller.CreateSessionViewer(message.ProxyID, message.Username, message.Password, message.SessionKey)
 			} else {
-				err, viewer = controller.createUserSessionViewer(message.ProxyID, message.Username)	
+				err, viewer = controller.CreateUserSessionViewer(message.ProxyID, message.Username, message.Password)	
 			}
 			if err == nil {
 				var data []byte
@@ -179,21 +179,21 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 	case CONTROLLER_MESSAGE_ADD_PROXY_USER:
 		if message.ProxyUser != nil {
 			var key  string
-			err, key = controller.addUserToProxy(message.ProxyID, message.ProxyUser)
+			err, key = controller.AddUserToProxy(message.ProxyID, message.ProxyUser)
 			if err == nil {
 				reply["UserKey"] = key
 			}
 		} else {
-			err = errors.New("No proxyUser provided")
+			err = errors.New("No ProxyUser provided")
 		}
 	case CONTROLLER_MESSAGE_REMOVE_PROXY_USER:
 		if message.Username != "" {
-			err = controller.removeUserFromProxy(message.ProxyID, message.Username, message.Password)
+			err = controller.RemoveUserFromProxy(message.ProxyID, message.Username, message.Password)
 		}
 	case CONTROLLER_MESSAGE_ADD_CHANNEL_FILTER:
 		if message.FindString != nil && message.ReplaceString != nil && message.Username != "" {
 			var key string
-			err, key = controller.addChannelFilterToUser(message.ProxyID, message.Username, message.Password, &channelFilterFunc{fn: 
+			err, key = controller.AddChannelFilterToUser(message.ProxyID, message.Username, message.Password, &ChannelFilterFunc{fn: 
 				func(in_data []byte, wrapper *channelWrapper) []byte {
 					return bytes.Replace(in_data,message.FindString, message.ReplaceString,-1)
 				}})
@@ -203,16 +203,16 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 		}
 	case CONTROLLER_MESSAGE_REMOVE_CHANNEL_FILTER:
 		if message.FilterKey != "" && message.Username != "" {
-			err = controller.removeChannelFilterFromUserByKey(message.ProxyID, message.Username, message.Password, message.FilterKey)
+			err = controller.RemoveChannelFilterFromUserByKey(message.ProxyID, message.Username, message.Password, message.FilterKey)
 		} else {
 			err = errors.New("Missing Username or FilterKey")
 		}
 	case CONTROLLER_MESSAGE_ADD_USER_CALLBACK:
 		var key string
 		if message.FindString != nil && message.CallbackURL != "" && message.Username != "" {
-			callback := &eventCallback{
+			callback := &EventCallback{
 				events: map[string]bool{EVENT_MESSAGE: true},
-				handler: func(event sessionEvent) {
+				handler: func(event SessionEvent) {
 					if bytes.Index(event.Data, message.FindString) != -1 {
 						data, err := json.Marshal(&event)
 						if err == nil {
@@ -223,14 +223,14 @@ func (message *controllerMessage) handleMessage(controller *proxyController) []b
 					}
 				},
 			}
-			err, key = controller.addEventCallbackToUser(message.ProxyID, message.Username, message.Password, callback)
+			err, key = controller.AddEventCallbackToUser(message.ProxyID, message.Username, message.Password, callback)
 			reply["CallbackKey"] = key
 		} else {
 			err = errors.New("Missing Username, FindString, or CallbackURL ")
 		}
 	case CONTROLLER_MESSAGE_REMOVE_USER_CALLBACK:
 		if message.CallbackKey != "" && message.Username != "" {
-			err = controller.removeEventCallbackFromUserByKey(message.ProxyID, message.Username, message.Password, message.CallbackKey)
+			err = controller.RemoveEventCallbackFromUserByKey(message.ProxyID, message.Username, message.Password, message.CallbackKey)
 		} else {
 			err = errors.New("Missing Username or CallbackKey")
 		}

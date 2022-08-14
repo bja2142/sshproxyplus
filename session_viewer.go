@@ -1,9 +1,9 @@
-package main
+package sshproxyplus
 
 
 import (
 	"crypto/rand"
-	"encoding/base64"
+	//"encoding/base64"
 	"fmt"
 	"io"
 	"math/big"
@@ -19,8 +19,8 @@ const SESSION_VIEWER_EXPIRATION = -1
 type proxySessionViewer struct {
 	ViewerType int
 	Secret string
-	proxy *proxyContext
-	User  *proxyUser
+	proxy *ProxyContext
+	User  *ProxyUser
 	SessionKey string
 	expiration int64
 }
@@ -29,11 +29,11 @@ func (viewer *proxySessionViewer) buildSignedURL(proxyID uint64) string {
 	return fmt.Sprintf("%v/?id=%v#signed-viewer&%v", viewer.proxy.BaseURI,proxyID,viewer.Secret)
 }
 
-func createNewSessionViewer(ViewerType int, proxy *proxyContext, user *proxyUser) *proxySessionViewer {
+func createNewSessionViewer(ViewerType int, proxy *ProxyContext, user *ProxyUser) *proxySessionViewer {
 	viewer := &proxySessionViewer{}
 	var err error
 	viewer.ViewerType = ViewerType
-	viewer.Secret, err = GenerateRandomString(SESSION_VIEWER_SECRET_LEN)
+	viewer.Secret, err = generateRandomString(SESSION_VIEWER_SECRET_LEN)
 	viewer.User = user
 	viewer.proxy = proxy
 
@@ -53,12 +53,12 @@ func (viewer *proxySessionViewer) typeIsList() bool {
 	return viewer.ViewerType == SESSION_VIEWER_TYPE_LIST
 }
 
-func (viewer *proxySessionViewer) getSessions() (map[string]*sessionContext, []string) {
+func (viewer *proxySessionViewer) getSessions() (map[string]*SessionContext, []string) {
 	session_keys := make([]string, 0)
-	user_key := viewer.User.getKey()
+	user_key := viewer.User.GetKey()
 	if  _, ok := viewer.proxy.userSessions[user_key]; ok {
 		if viewer.typeIsSingle() {
-			finalMap := make(map[string]*sessionContext)
+			finalMap := make(map[string]*SessionContext)
 			if _, ok := viewer.proxy.userSessions[user_key][viewer.SessionKey]; ok {
 				finalMap[viewer.SessionKey] = viewer.proxy.userSessions[user_key][viewer.SessionKey]
 				session_keys = append(session_keys,viewer.SessionKey)
@@ -69,7 +69,7 @@ func (viewer *proxySessionViewer) getSessions() (map[string]*sessionContext, []s
 		}
 	} else {
 		//viewer.proxy.log.Println("could not find user_key in user session", user_key, viewer.proxy.userSessions)
-		return make(map[string]*sessionContext), session_keys
+		return make(map[string]*SessionContext), session_keys
 	}
 }
 
@@ -96,6 +96,7 @@ func assertAvailablePRNG() {
 	}
 }
 
+/*
 // GenerateRandomBytes returns securely generated random bytes.
 // It will return an error if the system's secure random
 // number generator fails to function correctly, in which
@@ -109,13 +110,13 @@ func GenerateRandomBytes(n int) ([]byte, error) {
 	}
 
 	return b, nil
-}
+}*/
 
-// GenerateRandomString returns a securely generated random string.
+// generateRandomString returns a securely generated random string.
 // It will return an error if the system's secure random
 // number generator fails to function correctly, in which
 // case the caller should not continue.
-func GenerateRandomString(n int) (string, error) {
+func generateRandomString(n int) (string, error) {
 	const letters = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_."
 	ret := make([]byte, n)
 	for i := 0; i < n; i++ {
@@ -129,12 +130,13 @@ func GenerateRandomString(n int) (string, error) {
 	return string(ret), nil
 }
 
-// GenerateRandomStringURLSafe returns a URL-safe, base64 encoded
+/*
+// generateRandomStringURLSafe returns a URL-safe, base64 encoded
 // securely generated random string.
 // It will return an error if the system's secure random
 // number generator fails to function correctly, in which
 // case the caller should not continue.
-func GenerateRandomStringURLSafe(n int) (string, error) {
+func generateRandomStringURLSafe(n int) (string, error) {
 	b, err := GenerateRandomBytes(n)
 	return base64.RawURLEncoding.EncodeToString(b), err
-}
+}*/

@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 import (
 	"testing"
@@ -19,6 +19,8 @@ import (
 	"math/big"
 	"os"
 	"encoding/pem"
+	//"strconv"
+	//"strings"
 )
 
 func newRandomPort() *big.Int {
@@ -27,18 +29,18 @@ func newRandomPort() *big.Int {
 	return port
 }
 
-func makeNewController() *proxyController {
+func makeNewController() *ProxyController {
 	port := newRandomPort()
-	controller := &proxyController{
+	controller := &ProxyController{
 		SocketType: PROXY_CONTROLLER_SOCKET_PLAIN,
 		SocketHost: "127.0.0.1:"+port.Text(10),
 		PresharedKey: "key",
-		Proxies: make(map[uint64]*proxyContext),
+		Proxies: make(map[uint64]*ProxyContext),
 		WebHost: "127.0.0.1:"+port.Add(port,big.NewInt(1)).Text(10),
 		WebStaticDir: ".",
 		log: log.Default(),
 	}
-	controller.initialize()
+	controller.Initialize()
 	return controller
 }
 
@@ -78,7 +80,7 @@ func makeTestKeys() (string, string, func()) {
 	if err != nil {
 		log.Fatalf("Failed to create certificate: %v", err)
 	}
-	keypairString, _ := GenerateRandomString(8)
+	keypairString, _ := generateRandomString(8)
 	certFilename := "test-cert-" +keypairString + ".pem"
 	keyFilename := "test-key-" + keypairString + ".pem"
 	
@@ -168,15 +170,15 @@ func TestControllerAddProxyFromJSON(t *testing.T) {
 		"BaseURI": "https://192.168.122.69:8443"
 	}`)
 
-	err,proxyID := controller.addProxyFromJSON(proxyJSON)
+	err,proxyID := controller.AddProxyFromJSON(proxyJSON)
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
 	}
 
-	proxy, err := controller.getProxy(proxyID)
+	proxy, err := controller.GetProxy(proxyID)
 
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when getting proxy just created: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when getting proxy just created: %s",err)
 	}
 
 	if (proxy.DefaultRemotePort != 22 || 
@@ -195,31 +197,31 @@ func TestControllerAddProxyFromJSON(t *testing.T) {
 	   proxy.Users == nil || 
 	   proxy.BaseURI != "https://192.168.122.69:8443" ||
 	   proxy.ServerVersion != "SSH-2.0-OpenSSH_7.9p1 Raspbian-10") {
-		t.Errorf("*controller addProxyFromJSON() error populating values in proxy object")
+		t.Errorf("*controller.AddProxyFromJSON() error populating values in proxy object")
 	}
 
 	testProxyUser, testProxyUserFound := proxy.Users["testuser:"]
 	if ( ! testProxyUserFound ) {
-		t.Fatalf("*controller addProxyFromJSON() generated proxy did not get test user: %v", proxy.Users)
+		t.Fatalf("*controller.AddProxyFromJSON() generated proxy did not get test user: %v", proxy.Users)
 	}
 	if ( testProxyUser.Username!= "testuser" || 
 		 testProxyUser.RemoteHost != "127.0.0.1:22" || 
 		 testProxyUser.RemoteUsername != "ben" || 
 		 testProxyUser.RemotePassword != "password" ) {
-			t.Errorf("*controller addProxyFromJSON() test proxy user did not correctly populate")
+			t.Errorf("*controller.AddProxyFromJSON() test proxy user did not correctly populate")
 		 }
 
 	testProxyViewer, testProxyViewerFound := proxy.Viewers["2r3K4wQZegCz6i-6k1SMx1kb5x2BntDZpQsWXYxFDEMAsbY-tb0MshRzmuXLL.IZ"]
 	if ( ! testProxyViewerFound ) {
-		t.Fatalf("*controller addProxyFromJSON() generated proxy did not get test viewer: %v", proxy.Viewers)
+		t.Fatalf("*controller.AddProxyFromJSON() generated proxy did not get test viewer: %v", proxy.Viewers)
 	}
 	if ( testProxyViewer.ViewerType != 1 || // SESSION_VIEWER_TYPE_LIST
 		testProxyViewer.Secret != "2r3K4wQZegCz6i-6k1SMx1kb5x2BntDZpQsWXYxFDEMAsbY-tb0MshRzmuXLL.IZ" ||
 		testProxyViewer.SessionKey != "" ) {
-		t.Errorf("*controller addProxyFromJSON() test proxy viewer did not correctly populate: %v", testProxyViewer)
+		t.Errorf("*controller.AddProxyFromJSON() test proxy viewer did not correctly populate: %v", testProxyViewer)
 	}
 	if (testProxyViewer.User != proxy.Users["testuser:"] ) {
-		t.Errorf("*controller addProxyFromJSON() test proxy viewer user (%p) does not point to expected user: %p", testProxyViewer.User, proxy.Users["testuser:"])
+		t.Errorf("*controller.AddProxyFromJSON() test proxy viewer user (%p) does not point to expected user: %p", testProxyViewer.User, proxy.Users["testuser:"])
 	}
 
 }
@@ -229,15 +231,15 @@ func TestControllerAddProxyFromJSONEmptyCase(t *testing.T) {
 
 	proxyJSON := []byte(`{}`)
 
-	err,proxyID := controller.addProxyFromJSON(proxyJSON)
+	err,proxyID := controller.AddProxyFromJSON(proxyJSON)
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
 	}
 
-	_, err = controller.getProxy(proxyID)
+	_, err = controller.GetProxy(proxyID)
 
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when getting proxy just created: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when getting proxy just created: %s",err)
 	}
 }
 
@@ -246,23 +248,23 @@ func TestControllerStartAndStopProxy(t *testing.T) {
 
 	proxyJSON := []byte(`{}`)
 
-	err,proxyID := controller.addProxyFromJSON(proxyJSON)
+	err,proxyID := controller.AddProxyFromJSON(proxyJSON)
 	if err != nil {
-		t.Fatalf("*controller addProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
+		t.Fatalf("*controller.AddProxyFromJSON() error when parsing valid proxy JSON blob: %s",err)
 	}
-	proxy, err := controller.getProxy(proxyID)
+	proxy, err := controller.GetProxy(proxyID)
 	if err != nil {
 		t.Fatalf("*controller getPRoxy() error when getting proxy just created: %s",err)
 	}
 
-	err = controller.startProxy(proxyID)
+	err = controller.StartProxy(proxyID)
 	for proxy.running == false {
 		time.Sleep(100)
 	}
-	controller.stopProxy(proxyID)
+	controller.StopProxy(proxyID)
 
 	if (err != nil) {
-		t.Fatalf("*controller startProxy() error when starting proxy: %s",err)
+		t.Fatalf("*controller.StartProxy() error when starting proxy: %s",err)
 	}
 
 	
@@ -274,189 +276,189 @@ func TestControllerStartAndStopProxy(t *testing.T) {
 func TestControllerAddAndGetProxySingle(t *testing.T) {
 	controller := makeNewController()
 
-	proxy := makeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.defaultSigner)
 
 	var expectedProxyID uint64 = 5
 	controller.ProxyCounter = expectedProxyID
 
-	proxyID := controller.addExistingProxy(proxy)
+	proxyID := controller.AddExistingProxy(proxy)
 
 	if(proxyID != expectedProxyID){
-		t.Fatalf("*controller addExistingProxy() error did not produce expected proxy ID. Expected: %v, Got: %v",expectedProxyID, proxyID)
+		t.Fatalf("*controller.AddExistingProxy() error did not produce expected proxy ID. Expected: %v, Got: %v",expectedProxyID, proxyID)
 	}
 
-	gotProxy, err := controller.getProxy(proxyID)
+	gotProxy, err := controller.GetProxy(proxyID)
 
 	if err != nil {
-		t.Fatalf("*controller getProxy() error when getting proxy just created: %s",err)
+		t.Fatalf("*controller.GetProxy() error when getting proxy just created: %s",err)
 	}
 
 	if gotProxy != proxy {
-		t.Errorf("*controller getProxy() did not return the expected proxy when given its corresponding ID.")
+		t.Errorf("*controller.GetProxy() did not return the expected proxy when given its corresponding ID.")
 	}
 }
 
 func TestControllerAddAndGetProxyMultiple(t *testing.T) {
 	controller := makeNewController()
 
-	proxy0 := makeNewProxy(controller.defaultSigner)
-	proxy1 := makeNewProxy(controller.defaultSigner)
-	proxy2 := makeNewProxy(controller.defaultSigner)
+	proxy0 := MakeNewProxy(controller.defaultSigner)
+	proxy1 := MakeNewProxy(controller.defaultSigner)
+	proxy2 := MakeNewProxy(controller.defaultSigner)
 
 
-	proxyID0 := controller.addExistingProxy(proxy0)
-	proxyID1 := controller.addExistingProxy(proxy1)
-	proxyID2 := controller.addExistingProxy(proxy2)
+	proxyID0 := controller.AddExistingProxy(proxy0)
+	proxyID1 := controller.AddExistingProxy(proxy1)
+	proxyID2 := controller.AddExistingProxy(proxy2)
 
 
 	if(proxyID0 != 0 || proxyID1 != 1 || proxyID2 != 2 ){
-		t.Fatalf("*controller addExistingProxy() error did not produce expected proxy IDs.")
+		t.Fatalf("*controller.AddExistingProxy() error did not produce expected proxy IDs.")
 	}
 
-	gotProxy0, err0 := controller.getProxy(proxyID0)
-	gotProxy1, err1 := controller.getProxy(proxyID1)
-	gotProxy2, err2 := controller.getProxy(proxyID2)
+	gotProxy0, err0 := controller.GetProxy(proxyID0)
+	gotProxy1, err1 := controller.GetProxy(proxyID1)
+	gotProxy2, err2 := controller.GetProxy(proxyID2)
 
 	if err0 != nil  || err1 != nil || err2 != nil {
-		t.Fatalf("*controller getProxy() error when getting a proxy just created: %v, %v, %v",err0, err1, err2)
+		t.Fatalf("*controller.GetProxy() error when getting a proxy just created: %v, %v, %v",err0, err1, err2)
 	}
 
 	if gotProxy0 != proxy0 || gotProxy1 != proxy1 || gotProxy2 != proxy2 {
-		t.Errorf("*controller getProxy() did not return the expected proxy when given its corresponding ID.")
+		t.Errorf("*controller.GetProxy() did not return the expected proxy when given its corresponding ID.")
 	}
 }
 
 func TestControllerGetProxyErrorConditionWrongID(t *testing.T) {
 	controller := makeNewController()
 
-	proxy := makeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.defaultSigner)
 
 	var fakeProxyID  uint64 = 10
 	
-	controller.addExistingProxy(proxy)
+	controller.AddExistingProxy(proxy)
 
-	_, err := controller.getProxy(fakeProxyID)
+	_, err := controller.GetProxy(fakeProxyID)
 
 	if err == nil {
-		t.Fatalf("*controller getProxy() did not return error when trying to get a proxy that doesn't exist: %s",err)
+		t.Fatalf("*controller.GetProxy() did not return error when trying to get a proxy that doesn't exist: %s",err)
 	}
 }
 
 func TestControllerDestroyProxy(t *testing.T) {
 	controller := makeNewController()
 
-	proxy0 := makeNewProxy(controller.defaultSigner)
-	proxy1 := makeNewProxy(controller.defaultSigner)
-	proxy2 := makeNewProxy(controller.defaultSigner)
+	proxy0 := MakeNewProxy(controller.defaultSigner)
+	proxy1 := MakeNewProxy(controller.defaultSigner)
+	proxy2 := MakeNewProxy(controller.defaultSigner)
 
 
-	proxyID0 := controller.addExistingProxy(proxy0)
-	proxyID1 := controller.addExistingProxy(proxy1)
-	proxyID2 := controller.addExistingProxy(proxy2)
+	proxyID0 := controller.AddExistingProxy(proxy0)
+	proxyID1 := controller.AddExistingProxy(proxy1)
+	proxyID2 := controller.AddExistingProxy(proxy2)
 
-	controller.destroyProxy(proxyID1)
+	controller.DestroyProxy(proxyID1)
 
-	gotProxy1, err1 := controller.getProxy(proxyID1)
+	gotProxy1, err1 := controller.GetProxy(proxyID1)
 
 	if err1 == nil {
-		t.Fatalf("*controller getProxy() did not throw error when it should have")
+		t.Fatalf("*controller.GetProxy() did not throw error when it should have")
 	}
 
 	if gotProxy1 != nil {
-		t.Errorf("*controller getProxy() returned a destroyed proxy when it shouldn't have")
+		t.Errorf("*controller.GetProxy() returned a destroyed proxy when it shouldn't have")
 	}
 
-	gotProxy0, err0 := controller.getProxy(proxyID0)
-	gotProxy2, err2 := controller.getProxy(proxyID2)
+	gotProxy0, err0 := controller.GetProxy(proxyID0)
+	gotProxy2, err2 := controller.GetProxy(proxyID2)
 
 	if err0 != nil  || err2 != nil {
-		t.Errorf("*controller getProxy() error when getting a proxy just created: %v, %v, %v",err0, err1, err2)
+		t.Errorf("*controller.GetProxy() error when getting a proxy just created: %v, %v, %v",err0, err1, err2)
 	}
 
 	if gotProxy0 != proxy0 || gotProxy2 != proxy2 {
-		t.Errorf("*controller getProxy() did not return the expected proxy when given its corresponding ID.")
+		t.Errorf("*controller.GetProxy() did not return the expected proxy when given its corresponding ID.")
 	}
 
-	err := controller.destroyProxy(proxyID1)
+	err := controller.DestroyProxy(proxyID1)
 
 	if err == nil {
-		t.Errorf("*controller destroyProxy didn't error out when it should have after destroying the same proxy a second time.")
+		t.Errorf("*controller.DestroyProxy didn't error out when it should have after destroying the same proxy a second time.")
 	}
 }
 
 func TestControllerActivateProxy(t *testing.T) {
 	controller := makeNewController()
 
-	proxy := makeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.defaultSigner)
 	
-	proxyID := controller.addExistingProxy(proxy)
+	proxyID := controller.AddExistingProxy(proxy)
 
 	proxy.active = false
 
-	err := controller.activateProxy(proxyID)
+	err := controller.ActivateProxy(proxyID)
 
 	if err != nil {
-		t.Fatalf("*controller activateProxy() had an error: %s",err)
+		t.Fatalf("*controller.ActivateProxy() had an error: %s",err)
 	}
 
 	if proxy.active == false {
-		t.Fatalf("*controller actiateProxy() did not activate the proxy")
+		t.Fatalf("*controller.ActivateProxy() did not activate the proxy")
 	}
 }
 
 func TestControllerDeactivateProxy(t *testing.T) {
 	controller := makeNewController()
 
-	proxy := makeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.defaultSigner)
 	
-	proxyID := controller.addExistingProxy(proxy)
+	proxyID := controller.AddExistingProxy(proxy)
 
 	proxy.active = true
 
-	err := controller.deactivateProxy(proxyID)
+	err := controller.DeactivateProxy(proxyID)
 
 	if err != nil {
-		t.Fatalf("*controller deactivateProxy() had an error: %s",err)
+		t.Fatalf("*controller.DeactivateProxy() had an error: %s",err)
 	}
 
 	if proxy.active == true {
-		t.Fatalf("*controller deactivateProxy() did not deactivate the proxy")
+		t.Fatalf("*controller.DeactivateProxy() did not deactivate the proxy")
 	}
 }
 
 
 func TestControllerCreateAndGetProxyViewerByViewerKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, viewer := controller.createUserSessionViewer(proxyID, user.Username)
+	err, viewer := controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
 	if (! viewer.typeIsList()) {
-		t.Errorf("controller createUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
+		t.Errorf("controller.CreateUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
 	}
 
 	viewerKey := viewer.Secret
 
-	err, testViewer := controller.getProxyViewerByViewerKey(proxyID, viewerKey)
+	err, testViewer := controller.GetProxyViewerByViewerKey(proxyID, viewerKey)
 
 	if err != nil {
-		t.Fatalf("*controller getProxyViewerByViewerKey() threw an error getting the viewer: %s",err)
+		t.Fatalf("*controller.GetProxyViewerByViewerKey() threw an error getting the viewer: %s",err)
 	}
 
 	if testViewer != viewer {
-		t.Errorf("controller getProxyViewerByViewerKey() did not return the correct viewer.")
+		t.Errorf("controller.GetProxyViewerByViewerKey() did not return the correct viewer.")
 
 	}
 
@@ -464,68 +466,68 @@ func TestControllerCreateAndGetProxyViewerByViewerKey(t *testing.T) {
 
 func TestControllerCreateAndGetProxyViewerBySessionKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
 	testSessionKey := "myfake-session-key.json"
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, viewer := controller.createSessionViewer(proxyID, user.Username, testSessionKey)
+	err, viewer := controller.CreateSessionViewer(proxyID, user.Username, user.Password, testSessionKey)
 
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
 	if (! viewer.typeIsSingle()) {
-		t.Errorf("controller createSessionViewer() created a viewer of the wrong type. Expected single, but this was not so.")
+		t.Errorf("controller.CreateSessionViewer() created a viewer of the wrong type. Expected single, but this was not so.")
 	}
 
-	err, testViewer := controller.getProxyViewerBySessionKey(proxyID, testSessionKey)
+	err, testViewer := controller.GetProxyViewerBySessionKey(proxyID, testSessionKey)
 
 	if err != nil {
-		t.Fatalf("*controller getProxyViewerBySessionKey() threw an error getting the viewer: %s",err)
+		t.Fatalf("*controller.GetProxyViewerBySessionKey() threw an error getting the viewer: %s",err)
 	}
 
 	if testViewer != viewer {
-		t.Errorf("controller getProxyViewerBySessionKey() did not return the correct viewer.")
+		t.Errorf("controller.GetProxyViewerBySessionKey() did not return the correct viewer.")
 
 	}
 }
 
 func TestControllerCreateAndGetProxyViewerByUsername(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, viewer := controller.createUserSessionViewer(proxyID, user.Username)
+	err, viewer := controller.CreateUserSessionViewer(proxyID, user.Username, user.Password)
 
 	if (err != nil) {
-		t.Fatalf("*controller createUserSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateUserSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
 	if (! viewer.typeIsList()) {
-		t.Errorf("controller createUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
+		t.Errorf("controller.CreateUserSessionViewer() created a viewer of the wrong type. Expected list, but this was not so.")
 	}
-	err, testViewer := controller.getProxyViewerByUsername(proxyID, user.Username)
+	err, testViewer := controller.GetProxyViewerByUsername(proxyID, user.Username)
 
 	if err != nil {
-		t.Fatalf("*controller getProxyViewerByUsername() threw an error getting the viewer: %s",err)
+		t.Fatalf("*controller.GetProxyViewerByUsername() threw an error getting the viewer: %s",err)
 	}
 
 	if testViewer != viewer {
-		t.Errorf("controller getProxyViewerByUsername() did not return the correct viewer.")
+		t.Errorf("controller.GetProxyViewerByUsername() did not return the correct viewer.")
 
 	}
 
@@ -535,89 +537,89 @@ func TestControllerCreateAndGetProxyViewerByUsername(t *testing.T) {
 
 func TestControllerCreateAndGetProxyViewersBySessionKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
 	testSessionKey := "myfake-session-key.json"
-	proxy.addProxyUser(user)
+	proxy.AddProxyUser(user)
 
-	err, _ := controller.createSessionViewer(proxyID, user.Username, testSessionKey)
+	err, _ := controller.CreateSessionViewer(proxyID, user.Username, user.Password, testSessionKey)
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
-	err, _ = controller.createSessionViewer(proxyID, user.Username, testSessionKey)
+	err, _ = controller.CreateSessionViewer(proxyID, user.Username, user.Password, testSessionKey)
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
-	err, _ = controller.createSessionViewer(proxyID, user.Username, "not the test key")
+	err, _ = controller.CreateSessionViewer(proxyID, user.Username, user.Password, "not the test key")
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
-	err, viewers := controller.getProxyViewersBySessionKey(proxyID, testSessionKey)
+	err, viewers := controller.GetProxyViewersBySessionKey(proxyID, testSessionKey)
 
 	if err != nil {
-		t.Fatalf("*controller getProxyViewersBySessionKey() threw an error getting the viewers: %s",err)
+		t.Fatalf("*controller.GetProxyViewersBySessionKey() threw an error getting the viewers: %s",err)
 	}
 
 	if len(viewers) != 2 {
-		t.Errorf("controller getProxyViewersBySessionKey() did not return the correct number of viewers")
+		t.Errorf("controller.GetProxyViewersBySessionKey() did not return the correct number of viewers")
 	}
 }
 
 func TestControllerCreateAndGetProxyViewersByUsername(t *testing.T) {
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	user2:= &proxyUser{
+	user2:= &ProxyUser{
 		Username: "user2",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
-	user3:= &proxyUser{
+	user3:= &ProxyUser{
 		Username: user2.Username,
 		Password: "with password",
 		RemoteHost: "127.0.0.2:22",
 		RemoteUsername: "ben2",
 		RemotePassword: "password2"}
 	testSessionKey := "myfake-session-key.json"
-	proxy.addProxyUser(user)
-	proxy.addProxyUser(user2)
-	proxy.addProxyUser(user3)
+	proxy.AddProxyUser(user)
+	proxy.AddProxyUser(user2)
+	proxy.AddProxyUser(user3)
 
-	err, _ := controller.createSessionViewer(proxyID, user.Username, testSessionKey)
+	err, _ := controller.CreateSessionViewer(proxyID, user.Username, user.Password, testSessionKey)
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
-	err, _ = controller.createSessionViewer(proxyID, user2.Username, testSessionKey)
+	err, _ = controller.CreateSessionViewer(proxyID, user2.Username, user2.Password, testSessionKey)
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
-	err, _ = controller.createSessionViewer(proxyID, user3.Username, "not the test key")
+	err, _ = controller.CreateSessionViewer(proxyID, user3.Username, user3.Password, "not the test key")
 	if (err != nil) {
-		t.Fatalf("*controller createSessionViewer() threw an error when creating new viewer: %s",err)
+		t.Fatalf("*controller.CreateSessionViewer() threw an error when creating new viewer: %s",err)
 	}
 
-	err, viewers := controller.getProxyViewersByUsername(proxyID, user2.Username)
+	err, viewers := controller.GetProxyViewersByUsername(proxyID, user2.Username)
 
 	if err != nil {
-		t.Fatalf("*controller getProxyViewersByUsername() threw an error getting the viewers: %s",err)
+		t.Fatalf("*controller.GetProxyViewersByUsername() threw an error getting the viewers: %s",err)
 	}
 
 	if len(viewers) != 2 {
-		t.Errorf("controller getProxyViewersByUsername() did not return the correct number of viewers")
+		t.Errorf("controller.GetProxyViewersByUsername() did not return the correct number of viewers")
 	}
 
 }
@@ -626,37 +628,37 @@ func TestControllerCreateAndGetProxyViewersByUsername(t *testing.T) {
 func TestAddAndRemoveProxyUser(t *testing.T) {
 
 	controller := makeNewController()
-	proxy := makeNewProxy(controller.defaultSigner)
-	proxyID := controller.addExistingProxy(proxy)
-	user:= &proxyUser{
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
 		Username: "testuser",
 		Password: "",
 		RemoteHost: "127.0.0.1:22",
 		RemoteUsername: "ben",
 		RemotePassword: "password"}
 	expectedKey := user.Username + ":" + user.Password
-	err, key := controller.addUserToProxy(proxyID,user)
+	err, key := controller.AddUserToProxy(proxyID,user)
 
 	if err != nil {
-		t.Fatalf("*controller addUserToProxy() threw an error adding a proxyUser: %s",err)
+		t.Fatalf("*controller.AddUserToProxy() threw an error adding a ProxyUser: %s",err)
 	}
 	if  key != expectedKey {
-		t.Fatalf("*controller addUserToProxy() did not create the expected proxy user key. Expected: %s, got: %s",expectedKey, key)
+		t.Fatalf("*controller.AddUserToProxy() did not create the expected proxy user key. Expected: %s, got: %s",expectedKey, key)
 	}
 
 	if len(proxy.Users) != 1 {
-		t.Fatalf("*controller addUserToProxy() did not actually add user to the proxy. proxy.Users is: %v", proxy.Users)
+		t.Fatalf("*controller.AddUserToProxy() did not actually add user to the proxy. Users is: %v", proxy.Users)
 
 	}
 
-	err = controller.removeUserFromProxy(proxyID, user.Username, user.Password)
+	err = controller.RemoveUserFromProxy(proxyID, user.Username, user.Password)
 
 	if err != nil {
-		t.Fatalf("*controller removeUserFromProxy() threw an error when removing user: %s",err)
+		t.Fatalf("*controller.RemoveUserFromProxy() threw an error when removing user: %s",err)
 	}
 
 	if len(proxy.Users) != 0 {
-		t.Fatalf("*controller removeUserFromProxy() did not actually remove user from proxy. proxy.Users is: %v", proxy.Users)
+		t.Fatalf("*controller.RemoveUserFromProxy() did not actually remove user from proxy. Users is: %v", proxy.Users)
 
 	}
 
@@ -671,13 +673,13 @@ func TestRemoveViewerFromProxy(t *testing.T) {
 func TestControllerListenPlain(t *testing.T) {
 	controller := makeNewController()
 	controller.SocketType = PROXY_CONTROLLER_SOCKET_PLAIN
-	go controller.listen()
+	go controller.Listen()
 	defer controller.Stop()
 	time.Sleep(100* time.Millisecond)
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_LIST_PROXIES,
 		}
-	_, signedMessage := message.sign([]byte(controller.PresharedKey))
+	_, signedMessage := message.Sign([]byte(controller.PresharedKey))
 	data, err := json.Marshal(signedMessage)
 
 	if (err != nil) {
@@ -722,13 +724,13 @@ func TestControllerListenTLS(t *testing.T) {
 	controller.TLSKey = testKey
 	controller.TLSCert = testCert
 	controller.SocketType = PROXY_CONTROLLER_SOCKET_TLS
-	go controller.listen()
+	go controller.Listen()
 	defer controller.Stop()
 	time.Sleep(100* time.Millisecond)
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_LIST_PROXIES,
 		}
-	_, signedMessage := message.sign([]byte(controller.PresharedKey))
+	_, signedMessage := message.Sign([]byte(controller.PresharedKey))
 	data, err := json.Marshal(signedMessage)
 
 	if (err != nil) {
@@ -776,13 +778,13 @@ func TestControllerListenTLS(t *testing.T) {
 func TestControllerListenWeb(t *testing.T) {
 	controller := makeNewController()
 	controller.SocketType = PROXY_CONTROLLER_SOCKET_PLAIN_WEBSOCKET
-	go controller.listen()
+	go controller.Listen()
 	defer controller.Stop()
 	time.Sleep(100* time.Millisecond)
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_LIST_PROXIES,
 		}
-	_, signedMessage := message.sign([]byte(controller.PresharedKey))
+	_, signedMessage := message.Sign([]byte(controller.PresharedKey))
 	data, err := json.Marshal(signedMessage)
 
 	if (err != nil) {
@@ -840,13 +842,13 @@ func TestControllerListenWebTLS(t *testing.T) {
 	controller.TLSKey = testKey
 	controller.TLSCert = testCert
 	controller.SocketType = PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET
-	go controller.listen()
+	go controller.Listen()
 	defer controller.Stop()
 	time.Sleep(100* time.Millisecond)
-	message := &controllerMessage{
+	message := &ControllerMessage{
 		MessageType: CONTROLLER_MESSAGE_LIST_PROXIES,
 		}
-	_, signedMessage := message.sign([]byte(controller.PresharedKey))
+	_, signedMessage := message.Sign([]byte(controller.PresharedKey))
 	data, err := json.Marshal(signedMessage)
 
 	if (err != nil) {
@@ -880,11 +882,11 @@ func TestControllerListenWebTLS(t *testing.T) {
 
 func TestControllerStartWebServerPlaintext(t *testing.T) {
 	controller := makeNewController()
-	controller.initializeSocket()
-	proxy := makeNewProxy(controller.defaultSigner)
-	controller.addExistingProxy(proxy)
-	go controller.startWebServer()
-	defer controller.stopWebServer()
+	controller.InitializeSocket()
+	proxy := MakeNewProxy(controller.defaultSigner)
+	controller.AddExistingProxy(proxy)
+	go controller.StartWebServer()
+	defer controller.StopWebServer()
 	time.Sleep(100* time.Millisecond)
 	connectURL := url.URL{Scheme: "ws", Host: controller.WebHost, Path: "/proxysocket/?id=0"}
 	conn, _, err := websocket.DefaultDialer.Dial(connectURL.String(), nil)
@@ -915,11 +917,11 @@ func TestControllerStartWebServerTLS(t *testing.T) {
 	controller.TLSKey = testKey
 	controller.TLSCert = testCert
 	controller.SocketType = PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET
-	controller.initializeSocket()
-	proxy := makeNewProxy(controller.defaultSigner)
-	controller.addExistingProxy(proxy)
-	go controller.startWebServer()
-	defer controller.stopWebServer()
+	controller.InitializeSocket()
+	proxy := MakeNewProxy(controller.defaultSigner)
+	controller.AddExistingProxy(proxy)
+	go controller.StartWebServer()
+	defer controller.StopWebServer()
 	time.Sleep(100* time.Millisecond)
 	TLSDialer :=makeTLSWebsocketDialer(testCert)
 
@@ -943,13 +945,160 @@ func TestControllerStartWebServerTLS(t *testing.T) {
     }
 }
 
+func TestAddAndRemoveChannelFilterFromUsery(t *testing.T) {
+	controller := makeNewController()
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxyID := controller.AddExistingProxy(proxy)
+	user:= &ProxyUser{
+		Username: "testuser",
+		Password: "",
+		RemoteHost: "127.0.0.1:22",
+		RemoteUsername: "ben",
+		RemotePassword: "password"}
+	proxy.AddProxyUser(user)
+
+	err, key := controller.AddChannelFilterToUser(proxyID, user.Username, user.Password, &ChannelFilterFunc{fn: 
+		func(in_data []byte, wrapper *channelWrapper) []byte {
+			return in_data
+		}})
 	
-// verify web server is able to see events occurring
+	if err != nil {
+		t.Fatalf("*controller.AddChannelFilterToUser() threw an unexpected error: %s",err)
+	}
+
+	if user.channelFilters == nil {
+		t.Fatalf("*controller.AddChannelFilterToUser() failed to allocate list.")
+	}
+	
+	if len( user.channelFilters) == 0 {
+		t.Fatalf("*controller.AddChannelFilterToUser() failed to actually add channel filter.")
+	}
+
+	err = controller.RemoveChannelFilterFromUserByKey(proxyID, user.Username, user.Password, key)
+	if err != nil {
+		t.Fatalf("*controller.RemoveChannelFilterFromUserByKey() threw an error: %s", err)
+	}
+	
+	if len( user.channelFilters) != 0 {
+		t.Fatalf("*controller.RemoveChannelFilterFromUserByKey() failed to actually remove filter.")
+	}
+	
+}
+
+/*
+func TestControllerFullIntegration(t *testing.T) {
+
+	return
+
+	testString := "echo this is a test string"
+	newString :=  "echo this is a new string"
+	testUsername := "user"
+	testPassword := "password"
+
+	dummyServer := testSSHServer{
+		port: newRandomPort(),
+		t: t,
+		active: true,
+	}
+	go dummyServer.listen()
+
+	time.Sleep(500*time.Millisecond)
+	
+	defer dummyServer.stop()
+
+// start dummy ssh server
+// https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
+	controller := makeNewController()
+	controller.InitializeSocket()
+	go controller.StartWebServer()
+	defer controller.StopWebServer()
 
 
+	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy.DefaultRemotePort = int(dummyServer.port.Int64())
+	proxy.ListenPort =  int(newRandomPort().Int64())
+	proxy.active = true
+	proxy.PublicAccess = false
+	proxyID := controller.AddExistingProxy(proxy)
+
+	testUser1 := &ProxyUser{
+		Username: "testuser1",
+		Password: "testPassword1",
+		RemoteUsername: testUsername,
+		RemotePassword: testPassword,
+	}
+
+	proxy.AddProxyUser(testUser)	
+
+	err, viewer := controller.CreateUserSessionViewer(proxyID, testUser1.Username, testUser1.Password)
+
+	// create proxy connecting to it
+
+	go proxy.StartProxy()
+	
+	time.Sleep(500*time.Millisecond)
+
+	// TODO: replace this with something like sendListOfCommandsToTestServer and include option of delay between actions
+	// move to goroutine
+	err, testReply := sendCommandToTestServer("127.0.0.1:"+strconv.Itoa(proxy.ListenPort), testUser, testPassword, testString)
+	if (err != nil) {
+		t.Errorf("Error when sending command to proxy: %s\n", err)
+	}
+	time.Sleep(time.Millisecond*100)
+
+	curUserSessions, userSessionEntryFound := proxy.userSessions[testUser1.getKey()]
+	if len(proxy.allSessions) != 1  {
+		t.Errorf("Proxy did not store session in allSessions.")
+	} else if ! userSessionEntryFound  {
+		t.Errorf("Proxy did not create entry in userSessions for user.")
+	} else if len(curUserSessions) != 1 {
+		t.Errorf("Proxy did not store session in userSessions.")
+	} else {
+
+		// use viewer to view this stuff in real time
+
+		connectURL := url.URL{Scheme: "ws", Host: controller.WebHost, Path: "/proxysocket/?id=0"}
+		conn, _, err := websocket.DefaultDialer.Dial(connectURL.String(), nil)
+		if err != nil {
+			t.Fatalf("Failed to connect to websocket: %s", err)
+		}
+		defer conn.Close()
+		err = conn.WriteMessage(websocket.TextMessage, []byte("viewer-get"))
+		if err != nil {
+			t.Fatalf("Write to websocket failed: %s", err)
+		}
+	
+		err = conn.WriteMessage(websocket.TextMessage, []byte(viewer.Secret))
+		if err != nil {
+			t.Fatalf("Write to websocket failed: %s", err)
+		}
+	
+		err = conn.WriteMessage(websocket.TextMessage, []byte(proxySessionActiveKey))
+		if err != nil {
+			t.Fatalf("Write to websocket failed: %s", err)
+		}
 
 
+		for testSessionKey, _ := range proxy.allSessions {
+			testSession := proxy.allSessions[testSessionKey]
+			if (strings.Compare(testSession.client_username, testUser) != 0) {
+				t.Errorf("Proxy session does not have expected username. Expected %s, got %s", testUser, testSession.client_username)
+			}
 
+			if (strings.Compare(testSession.client_password, testPassword) != 0) {
+				t.Errorf("Proxy session does not have expected password. Expected %s, got %s", testUser, testSession.client_password)
+			}
+		}
+	}
 
-// test start and stop of web server
-// test getting session 
+	proxy.Stop()
+
+	for testSessionKey, _ := range proxy.allSessions {
+		testSession := proxy.allSessions[testSessionKey]
+		err := os.Remove(testSession.filename)
+		if err != nil {
+			log.Printf("Failed to remove file during cleanup: %s\n", err)
+		}
+	}
+
+}*/

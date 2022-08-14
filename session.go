@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 
 import (
@@ -36,8 +36,8 @@ sequentially by numerical value.
 //var sessionIDCounter uint64 = 0
 
 // session context
-type sessionContext struct {
-	proxy				*proxyContext
+type SessionContext struct {
+	proxy				*ProxyContext
 	mutex				sync.Mutex
 	log_mutex			sync.Mutex
 	event_mutex			sync.Mutex
@@ -58,8 +58,8 @@ type sessionContext struct {
 	term_rows			uint32
 	term_cols			uint32
 	filename			string
-	events				[]*sessionEvent
-	user				*proxyUser
+	events				[]*SessionEvent
+	user				*ProxyUser
 	sessionID			string
 
 }
@@ -70,7 +70,7 @@ type sessionContext struct {
 // TODO: track all session events in a single list
 // similar to the logging rather than storing them in channels, etc
 
-func (session * sessionContext) handleChannels(dest_conn ssh.Conn, channels <-chan ssh.NewChannel) {
+func (session * SessionContext) HandleChannels(dest_conn ssh.Conn, channels <-chan ssh.NewChannel) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	defer dest_conn.Close()
@@ -83,7 +83,7 @@ func (session * sessionContext) handleChannels(dest_conn ssh.Conn, channels <-ch
 	}
 }
 
-func (session * sessionContext) getID() string {
+func (session * SessionContext) GetID() string {
 	return session.sessionID
 }
 
@@ -95,14 +95,14 @@ func getNextSessionIdCounter() uint64 {
 }*/
 
 
-func (session * sessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel ssh.NewChannel) {
+func (session * SessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel ssh.NewChannel) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	channel_id := session.channel_count
 
 	session.channel_count += 1
-	session.handleEvent(
-		&sessionEvent{
+	session.HandleEvent(
+		&SessionEvent{
 			Type: EVENT_NEW_CHANNEL,
 			ChannelType: cur_channel.ChannelType(),
 			ChannelData: cur_channel.ExtraData(),
@@ -150,7 +150,7 @@ func (session * sessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel s
 	<-dest_requests_completed
 }
 
-func (session * sessionContext) copyChannel(write_channel ssh.Channel, read_channel ssh.Channel, direction string, channel_type string,channel_id int) {
+func (session * SessionContext) copyChannel(write_channel ssh.Channel, read_channel ssh.Channel, direction string, channel_type string,channel_id int) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	defer write_channel.CloseWrite()
@@ -170,7 +170,7 @@ func (session * sessionContext) copyChannel(write_channel ssh.Channel, read_chan
 	<-done_copying
 }
 
-func (session * sessionContext) bidirectionalChannelClone(incoming_channel ssh.Channel, outgoing_channel ssh.Channel,channel_type string, channel_id int) {
+func (session * SessionContext) bidirectionalChannelClone(incoming_channel ssh.Channel, outgoing_channel ssh.Channel,channel_type string, channel_id int) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	incoming_write_done := make(chan struct{})
@@ -184,7 +184,7 @@ func (session * sessionContext) bidirectionalChannelClone(incoming_channel ssh.C
 }
 
 
-func (session * sessionContext) handleRequests(outgoing_conn requestDest, incoming_requests <-chan *ssh.Request , channel_id int) {
+func (session * SessionContext) handleRequests(outgoing_conn requestDest, incoming_requests <-chan *ssh.Request , channel_id int) {
 	session.markThreadStarted()
 	defer session.markThreadStopped()
 	for cur_request := range incoming_requests {
@@ -196,7 +196,7 @@ func (session * sessionContext) handleRequests(outgoing_conn requestDest, incomi
 }
 
 
-func (session * sessionContext) forwardRequest(outgoing_channel requestDest, request *ssh.Request, channel_id int) error {
+func (session * SessionContext) forwardRequest(outgoing_channel requestDest, request *ssh.Request, channel_id int) error {
 	
 	session.markThreadStarted()
 	defer session.markThreadStopped()
@@ -204,9 +204,9 @@ func (session * sessionContext) forwardRequest(outgoing_channel requestDest, req
 	request_id := session.request_count
 	session.request_count += 1
 	
-	request_entry := &request_data{Req_type: request.Type, Req_payload: request.Payload, Msg_type: "request-data", Offset: session.getTimeOffset() }
-	session.handleEvent(
-		&sessionEvent{
+	request_entry := &request_data{Req_type: request.Type, Req_payload: request.Payload, Msg_type: "request-data", Offset: session.GetTimeOffset() }
+	session.HandleEvent(
+		&SessionEvent{
 			Type: EVENT_NEW_REQUEST,
 			RequestType:  request.Type,
 			RequestPayload: request.Payload,
@@ -229,8 +229,8 @@ func (session * sessionContext) forwardRequest(outgoing_channel requestDest, req
 				width, height := parseDims(request.Payload[termLen+4:])
 				session.term_rows = height
 				session.term_cols = width
-				go session.handleEvent(
-					&sessionEvent{
+				go session.HandleEvent(
+					&SessionEvent{
 						Type: EVENT_WINDOW_RESIZE,
 						TermRows: session.term_rows,
 						TermCols: session.term_cols,
@@ -243,8 +243,8 @@ func (session * sessionContext) forwardRequest(outgoing_channel requestDest, req
 		width, height := parseDims(request.Payload)
 		session.term_rows = height
 		session.term_cols = width
-		go session.handleEvent(
-			&sessionEvent{
+		go session.HandleEvent(
+			&SessionEvent{
 				Type: EVENT_WINDOW_RESIZE,
 				TermRows: session.term_rows,
 				TermCols: session.term_cols,
@@ -276,23 +276,23 @@ func (session * sessionContext) forwardRequest(outgoing_channel requestDest, req
 	return nil
 }
 
-func (session * sessionContext) sendSignalToClients(signal int) {
+func (session * SessionContext) sendSignalToClients(signal int) {
 	for _, cur_signal := range session.msg_signal {
 		cur_signal <- signal
 	}
 }
 
-func (session * sessionContext) signalNewMessage() {
+func (session * SessionContext) signalNewMessage() {
 	session.sendSignalToClients(SIGNAL_NEW_MESSAGE)
 }
 
-func (session * sessionContext) signalSessionEnd() {
+func (session * SessionContext) signalSessionEnd() {
 	session.sendSignalToClients(SIGNAL_SESSION_END)
 }
 
 
 
-func (session * sessionContext) markThreadStarted() {
+func (session * SessionContext) markThreadStarted() {
 	session.mutex.Lock()
 	session.thread_count += 1
 	session.mutex.Unlock()
@@ -300,18 +300,18 @@ func (session * sessionContext) markThreadStarted() {
 
 
 
-func (session * sessionContext) end() {
+func (session * SessionContext) End() {
 	if (session.active) {
 		session.active = false
 		session.stop_time = time.Now()
-		session.handleEvent(
-			&sessionEvent{
+		session.HandleEvent(
+			&SessionEvent{
 				Type: EVENT_SESSION_STOP,
 				StopTime: session.getStopTimeAsUnix(),
 			})
 		session.signalSessionEnd()
 		session.finalizeLog()
-		session.proxy.addSessionToSessionList(session)
+		session.proxy.AddSessionToSessionList(session)
 		if session.remote_conn != nil {
 			conn := *session.remote_conn
 			conn.Close()
@@ -320,17 +320,17 @@ func (session * sessionContext) end() {
 }
 
 
-func (session * sessionContext) markThreadStopped() {
+func (session * SessionContext) markThreadStopped() {
 	session.mutex.Lock()
 	session.thread_count -= 1
 	if session.thread_count < 1 {
-		session.end()
+		session.End()
 	}
 	session.mutex.Unlock()
 }
 
 
-func (session * sessionContext) infoAsJSON() string {
+func (session * SessionContext) InfoAsJSON() string {
 	session_info := session_info_extended{
 		Start_time: 	session.start_time.Unix(),
 		Stop_time: 		session.stop_time.Unix(),
@@ -355,13 +355,13 @@ func (session * sessionContext) infoAsJSON() string {
 
 
 
-func (session * sessionContext) getTimeOffset() int64 {
+func (session * SessionContext) GetTimeOffset() int64 {
 	time_now := time.Now()
 	return time_now.Sub(session.start_time).Milliseconds()
 }
 
 
-func (session * sessionContext) initializeLog()  {
+func (session * SessionContext) initializeLog()  {
 	f, err := os.OpenFile(session.proxy.SessionFolder + "/" + session.filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		session.proxy.log.Println("error opening session log file:", err)
@@ -372,7 +372,7 @@ func (session * sessionContext) initializeLog()  {
 	session.appendToLog([]byte("[\n")); 
 }
 
-func (session * sessionContext) appendToLog(data []byte) {
+func (session * SessionContext) appendToLog(data []byte) {
 	session.log_mutex.Lock()
 	if _, err := session.log_fd.Write(data); err != nil {
 		session.log_fd.Close() // ignore error; Write error takes precedence
@@ -381,7 +381,7 @@ func (session * sessionContext) appendToLog(data []byte) {
 	session.log_mutex.Unlock()
 }
 
-func (session * sessionContext) finalizeLog()  {
+func (session * SessionContext) finalizeLog()  {
 	session.appendToLog([]byte("\n]"))
 	if err := session.log_fd.Close(); err != nil {
 		session.proxy.log.Println("error closing log file:", err)
@@ -398,7 +398,7 @@ func (session * sessionContext) finalizeLog()  {
 }
 
 
-func (session * sessionContext) makeNewSignal() chan int {
+func (session * SessionContext) MakeNewSignal() chan int {
 	new_msg_signal := make(chan int)
 	session.mutex.Lock()
 	session.msg_signal = append(session.msg_signal,new_msg_signal)
@@ -406,7 +406,7 @@ func (session * sessionContext) makeNewSignal() chan int {
 	return new_msg_signal
 }
 
-func (session * sessionContext) removeSignal(signal chan int) {
+func (session * SessionContext) RemoveSignal(signal chan int) {
 	session.mutex.Lock()
 	for index, val := range session.msg_signal {
 		if val == signal {
@@ -423,7 +423,7 @@ func (session * sessionContext) removeSignal(signal chan int) {
 
 type channelWrapper struct {
 	io.ReadWriter
-	session * sessionContext 
+	session * SessionContext 
 	direction string
 	data_type string
 	start_time   time.Time
@@ -445,8 +445,8 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 			}
 		}
 
-		go channel.session.handleEvent(
-			&sessionEvent{
+		go channel.session.HandleEvent(
+			&SessionEvent{
 				Type: EVENT_MESSAGE,
 				Direction: channel.direction,
 				ChannelType: channel.data_type,
@@ -480,7 +480,7 @@ func parseDims(b []byte) (uint32, uint32) {
 
 func newChannelWrapper(
 	in_channel io.ReadWriter, 
-	context * sessionContext, 
+	context * SessionContext, 
 	direction string, 
 	data_type string, 
 	start_time time.Time,

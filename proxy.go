@@ -1,4 +1,4 @@
-package main
+package sshproxyplus
 
 
 import (
@@ -21,7 +21,7 @@ const ACTIVE_POLLING_DELAY time.Duration = 500* time.Millisecond
 // combinations and redirect each
 // combination to a different remote
 // host
-type proxyContext struct {
+type ProxyContext struct {
 	running				bool
 	listener			net.Listener
 	DefaultRemotePort	int
@@ -29,7 +29,7 @@ type proxyContext struct {
 	ListenIP			string
 	ListenPort			int
 	private_key			ssh.Signer
-	log					loggerInterface
+	log					LoggerInterface
 	SessionFolder		string
 	TLSCert				string
 	TLSKey				string
@@ -37,9 +37,9 @@ type proxyContext struct {
 	OverrideUser		string
 	WebListenPort		int
 	ServerVersion		string
-	Users 				map[string]*proxyUser
-	userSessions		map[string]map[string]*sessionContext
-	allSessions			map[string]*sessionContext 
+	Users 				map[string]*ProxyUser
+	userSessions		map[string]map[string]*SessionContext
+	allSessions			map[string]*SessionContext 
 	RequireValidPassword	bool
 	active				bool
 	PublicAccess		bool
@@ -48,23 +48,23 @@ type proxyContext struct {
 	// when there are new sessions, block forwarding until this is true
 }
 
-type loggerInterface interface {
+type LoggerInterface interface {
 	Printf(format string, v ...any)
 	Println(v ...any)
 }
 
 // TODO: update authentication routine to 
-// check users list and only authorize
+// check Users list and only authorize
 // if user is in list
 // should also include default user option
 
 
-func makeNewProxy(signer ssh.Signer) *proxyContext {
-	return &proxyContext{
+func MakeNewProxy(signer ssh.Signer) *ProxyContext {
+	return &ProxyContext{
 		log: log.Default(),
-		Users: map[string]*proxyUser{},
-		userSessions: map[string]map[string]*sessionContext{},
-		allSessions: map[string]*sessionContext{},
+		Users: map[string]*ProxyUser{},
+		userSessions: map[string]map[string]*SessionContext{},
+		allSessions: map[string]*SessionContext{},
 		Viewers: map[string]*proxySessionViewer{},
 		DefaultRemotePort: 22,
 		DefaultRemoteIP: "127.0.0.1",
@@ -78,7 +78,7 @@ func makeNewProxy(signer ssh.Signer) *proxyContext {
 	}
 }
 
-func (proxy *proxyContext) startProxy() {
+func (proxy *ProxyContext) StartProxy() {
 
 	proxy.log.Printf("Starting proxy on socket %v:%v\n", proxy.ListenIP, proxy.ListenPort)
 	config := &ssh.ServerConfig{
@@ -95,7 +95,7 @@ func (proxy *proxyContext) startProxy() {
 
 		//TODO: make session_key unique with a counter
 
-		err, user := proxy.authenticateUser(conn.User(),string(password))
+		err, user := proxy.AuthenticateUser(conn.User(),string(password))
 
 		if(err != nil) {
 			proxy.log.Printf("authentication failed: %v\n",err)
@@ -148,7 +148,7 @@ func (proxy *proxyContext) startProxy() {
 			proxy.allSessions[sess_key+"_old"] = val
 			delete(proxy.allSessions, sess_key)
 		}
-		proxy.allSessions[sess_key] = new(sessionContext)
+		proxy.allSessions[sess_key] = new(SessionContext)
 		proxy.allSessions[sess_key].client_host = conn.RemoteAddr().String()
 		proxy.allSessions[sess_key].mutex.Lock()
 		
@@ -160,42 +160,42 @@ func (proxy *proxyContext) startProxy() {
 		
 		//go ssh.DiscardRequests(reqs)
 		// maybe we *can* discard requests?
-		go proxy.handleClientConn(ssh_conn, channels, reqs, proxy.allSessions[sess_key])
+		go proxy.HandleClientConn(ssh_conn, channels, reqs, proxy.allSessions[sess_key])
 	}
 }
 
-func (proxy *proxyContext) Stop() {
+func (proxy *ProxyContext) Stop() {
 	proxy.running = false
 	proxy.listener.Close()
-	for _, value := range proxy.allSessions { 
-		value.end()
+	for _, session := range proxy.allSessions { 
+		session.End()
 	}
 }
 
-func (proxy *proxyContext) addSessionToUserList(session *sessionContext) {
-	user := session.user.getKey()
+func (proxy *ProxyContext) AddSessionToUserList(session *SessionContext) {
+	user := session.user.GetKey()
 	if  _, ok := proxy.userSessions[user]; !ok {
-		proxy.userSessions[user] = make(map[string]*sessionContext)
+		proxy.userSessions[user] = make(map[string]*SessionContext)
 	}
-	session_id := session.getID()
+	session_id := session.GetID()
 	proxy.userSessions[user][session_id] = session
 }
 
-func (proxy *proxyContext) activate() {
+func (proxy *ProxyContext) Activate() {
 	proxy.active = true
 }
 
-func (proxy *proxyContext) deactivate() {
+func (proxy *ProxyContext) Deactivate() {
 	proxy.active = false
 }
 
-func (proxy *proxyContext) addSessionToSessionList(session * sessionContext) {
+func (proxy *ProxyContext) AddSessionToSessionList(session * SessionContext) {
 	filename := SESSION_LIST_FN
 	fd, err := os.OpenFile(proxy.SessionFolder + "/" + filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		proxy.log.Println("error opening session list file:", err)
 	}
-	if _, err := fd.WriteString(session.infoAsJSON() + "\n"); err != nil {
+	if _, err := fd.WriteString(session.InfoAsJSON() + "\n"); err != nil {
 		proxy.log.Println("error writing to session list file:", err)
 	}
 	if err := fd.Close(); err != nil {
@@ -206,7 +206,7 @@ func (proxy *proxyContext) addSessionToSessionList(session * sessionContext) {
 
 
 
-func (proxy *proxyContext) getProxyUser(username, password string, cloneUser bool) (error, *proxyUser,bool) {
+func (proxy *ProxyContext) GetProxyUser(username, password string, cloneUser bool) (error, *ProxyUser,bool) {
 	err := errors.New("not a valid user")
 	key := buildProxyUserKey(username,password)
 	if  val, ok := proxy.Users[key]; ok {
@@ -230,33 +230,33 @@ func (proxy *proxyContext) getProxyUser(username, password string, cloneUser boo
 	}
 }
 
-func (proxy *proxyContext) addProxyUser(user *proxyUser) string {
+func (proxy *ProxyContext) AddProxyUser(user *ProxyUser) string {
 	key := buildProxyUserKey(user.Username,user.Password)
 	proxy.Users[key] = user
 	return key
 }
 
-func (proxy *proxyContext) removeProxyUser(username string, password string) error {
+func (proxy *ProxyContext) RemoveProxyUser(username string, password string) error {
 	key := buildProxyUserKey(username,password)
 	var err error
 	if _, ok := proxy.Users[key]; ok {
 		delete(proxy.Users, key)
 	} else {
-		err = errors.New("That proxyUser does not exist")
+		err = errors.New("That ProxyUser does not exist")
 	}
 	return err
 }
 
-func (proxy *proxyContext) authenticateUser(username,password string) (error, *proxyUser) {
+func (proxy *ProxyContext) AuthenticateUser(username,password string) (error, *ProxyUser) {
 	
-	default_user := &proxyUser{
+	default_user := &ProxyUser{
 		Username: username,
 		Password: password,
-		RemoteHost: proxy.getDefaultRemoteHost(),
+		RemoteHost: proxy.GetDefaultRemoteHost(),
 		RemoteUsername: username,
 		RemotePassword: password,
-		eventCallbacks: make([]*eventCallback, 0),
-		channelFilters: make([]*channelFilterFunc,0),
+		EventCallbacks: make([]*EventCallback, 0),
+		channelFilters: make([]*ChannelFilterFunc,0),
 	}
 
 	// override password if it is provided
@@ -269,7 +269,7 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 	}
 
 	if(len(proxy.Users)>0) {
-		err, user,password_blank := proxy.getProxyUser(username, password,true)
+		err, user,password_blank := proxy.GetProxyUser(username, password,true)
 		if (err != nil) {
 			if ! proxy.RequireValidPassword {
 				return nil, default_user
@@ -288,35 +288,35 @@ func (proxy *proxyContext) authenticateUser(username,password string) (error, *p
 	}
 }
 
-func (proxy *proxyContext) getDefaultRemoteHost() string {
+func (proxy *ProxyContext) GetDefaultRemoteHost() string {
 	return proxy.DefaultRemoteIP +":"+strconv.Itoa(proxy.DefaultRemotePort)
 }
 
-func makeProxyFromJSON(data []byte, signer ssh.Signer) (error, *proxyContext) {
+func makeProxyFromJSON(data []byte, signer ssh.Signer) (error, *ProxyContext) {
 	var err error
-	proxy := &proxyContext{}
+	proxy := &ProxyContext{}
 	err = json.Unmarshal(data, proxy)
 	if err == nil {
-		proxy.initialize(signer)
+		proxy.Initialize(signer)
 	}
 	return err, proxy
 }
 
-func (proxy *proxyContext) initialize(defaultSigner ssh.Signer) {
+func (proxy *ProxyContext) Initialize(defaultSigner ssh.Signer) {
 
 	if (proxy.log == nil) {
 		proxy.log = log.Default()
 	}
 
 	if proxy.Users == nil {
-		proxy.Users = map[string]*proxyUser{}
+		proxy.Users = map[string]*ProxyUser{}
 	}
 	if proxy.userSessions == nil {
-		proxy.userSessions = map[string]map[string]*sessionContext{}
+		proxy.userSessions = map[string]map[string]*SessionContext{}
 	}
 
 	if proxy.allSessions == nil {
-		proxy.allSessions = map[string]*sessionContext{}
+		proxy.allSessions = map[string]*SessionContext{}
 	}
 
 	if proxy.Viewers == nil {
@@ -330,17 +330,17 @@ func (proxy *proxyContext) initialize(defaultSigner ssh.Signer) {
 	for _, viewer := range proxy.Viewers {
 		viewer.proxy = proxy
 		if(viewer.User != nil) {
-			err, user, _ := proxy.getProxyUser(viewer.User.Username, viewer.User.Password,false)
+			err, user, _ := proxy.GetProxyUser(viewer.User.Username, viewer.User.Password,false)
 			if err == nil && user != nil{
 				viewer.User = user
 			} else {
-				proxy.addProxyUser(viewer.User )
+				proxy.AddProxyUser(viewer.User )
 			}
 		}
 	}
 }
 
-func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_channels <-chan ssh.NewChannel, client_requests <-chan *ssh.Request, curSession *sessionContext) {
+func (proxy *ProxyContext) HandleClientConn(client_conn *ssh.ServerConn, client_channels <-chan ssh.NewChannel, client_requests <-chan *ssh.Request, curSession *SessionContext) {
 
 
 	//sess_key := client_conn.LocalAddr().String()+":"+client_conn.RemoteAddr().String()
@@ -385,9 +385,9 @@ func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_
 		shutdown_err <- remote_conn.Wait()
 	}()
 
-	proxy.addSessionToUserList(curSession)
+	proxy.AddSessionToUserList(curSession)
 
-	start_event := sessionEvent{
+	start_event := SessionEvent{
 		Type: EVENT_SESSION_START,
 		Key: curSession.sessionID,
 		ServHost: curSession.user.RemoteHost,
@@ -397,9 +397,9 @@ func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_
 		StartTime: curSession.getStartTimeAsUnix(),
 		TimeOffset: 0,
 	}
-	curSession.handleEvent(&start_event)
+	curSession.HandleEvent(&start_event)
 		
-	proxy.log.Printf("New session starting: %v\n",start_event.toJSON())
+	proxy.log.Printf("New session starting: %v\n",start_event.ToJSON())
 	for {
 		if (proxy.active) {
 			break;
@@ -410,8 +410,8 @@ func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_
 	
 
 	//curSession.log_session_data()
-	go curSession.handleChannels(remote_conn, client_channels)
-	go curSession.handleChannels(client_conn, remote_channels)
+	go curSession.HandleChannels(remote_conn, client_channels)
+	go curSession.HandleChannels(client_conn, remote_channels)
 	go curSession.handleRequests(client_conn, remote_requests, 0)
 	go curSession.handleRequests(remote_conn, client_requests, 0)
 	
@@ -422,15 +422,15 @@ func (proxy *proxyContext) handleClientConn(client_conn *ssh.ServerConn, client_
 }
 /*
 
-func (proxy *proxyContext) getSessionsKeys() []string {
+func (proxy *ProxyContext) getSessionsKeys() []string {
 	session_keys := make([]string, 0)
 	for key := range proxy.userSessions {
 		session_keys = append(session_keys,key)
 	}
 	return session_keys
-}*/
+}
 
-func (proxy *proxyContext) getUserSessionsKeys(user string) []string {
+func (proxy *ProxyContext) getUserSessionsKeys(user string) []string {
 	session_keys := make([]string, 0)
 	if val, ok := proxy.userSessions[user]; ok {
 		for key := range val {
@@ -441,34 +441,34 @@ func (proxy *proxyContext) getUserSessionsKeys(user string) []string {
 }
 
 
-func (proxy *proxyContext) getUsers() []string {
+func (proxy *ProxyContext) getUsers() []string {
 	users := make([]string, 0)
-	for key := range proxy.Users {
-		users = append(users,proxy.Users[key].Username)
+	for key := range Users {
+		users = append(users,users[key].Username)
 	}
-	return users
-}
+	return Users
+}*/
 
-func (proxy *proxyContext) makeSessionViewerForUser(user_key string) (error, *proxySessionViewer) {
+func (proxy *ProxyContext) MakeSessionViewerForUser(username,password string) (error, *proxySessionViewer) {
 
-	err,user,_ := proxy.getProxyUser(user_key, "",true)
+	err,user,_ := proxy.GetProxyUser(username, password,true)
 
 	if user != nil {
 		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_LIST,proxy, user)
-		proxy.addSessionViewer(viewer)
+		proxy.AddSessionViewer(viewer)
 		return err, viewer
 	} 
 	return err, nil
 }
 
 
-func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session string) (error, *proxySessionViewer) {
-	err,user,_ := proxy.getProxyUser(user_key, "",true)
+func (proxy *ProxyContext) MakeSessionViewerForSession(user_key string, password string, session string) (error, *proxySessionViewer) {
+	err,user,_ := proxy.GetProxyUser(user_key, password,true)
 
 	if user != nil {
 		viewer := createNewSessionViewer(SESSION_VIEWER_TYPE_SINGLE, proxy, user)
 		viewer.SessionKey = session
-		proxy.addSessionViewer(viewer)
+		proxy.AddSessionViewer(viewer)
 		return err, viewer
 	} else {
 		return err, nil
@@ -476,29 +476,29 @@ func (proxy *proxyContext) makeSessionViewerForSession(user_key string, session 
 }
 
 
-func (proxy *proxyContext) addSessionViewer(viewer *proxySessionViewer) {
+func (proxy *ProxyContext) AddSessionViewer(viewer *proxySessionViewer) {
 	key := viewer.Secret
 	proxy.Viewers[key] = viewer
 }
 
-func (proxy *proxyContext) removeSessionViewer(key string) {
+func (proxy *ProxyContext) RemoveSessionViewer(key string) {
 	if _, ok := proxy.Viewers[key]; ok {
 		delete(proxy.Viewers, key)
 	}
 }
 
-func (proxy *proxyContext) removeExpiredSessions() {
+func (proxy *ProxyContext) RemoveExpiredSessions() {
 	for key, val:= range proxy.Viewers {
 		if val.isExpired() {
-			proxy.removeSessionViewer(key)
+			proxy.RemoveSessionViewer(key)
 		} 
 	}
 }
 
-func (proxy *proxyContext) getSessionViewer(key string) *proxySessionViewer {
+func (proxy *ProxyContext) GetSessionViewer(key string) *proxySessionViewer {
 	if  val, ok := proxy.Viewers[key]; ok {
 		if val.isExpired() {
-			proxy.removeSessionViewer(key)
+			proxy.RemoveSessionViewer(key)
 		} else {
 			return val
 		}
@@ -506,7 +506,7 @@ func (proxy *proxyContext) getSessionViewer(key string) *proxySessionViewer {
 	return nil
 }
 
-func makeListOfSessionKeys(sessions map[string]*sessionContext, include_inactive bool) []string {
+func makeListOfSessionKeys(sessions map[string]*SessionContext, include_inactive bool) []string {
 	session_keys := make([]string, 0)
 	
 	for cur_key := range sessions {
@@ -518,22 +518,22 @@ func makeListOfSessionKeys(sessions map[string]*sessionContext, include_inactive
 	return session_keys
 }
 
-func (proxy *proxyContext) ListAllUserSessions(user string) []string {
+func (proxy *ProxyContext) ListAllUserSessions(user string) []string {
 	return makeListOfSessionKeys(proxy.userSessions[user],true)
 }
 
-func (proxy *proxyContext) ListAllActiveUserSessions(user string) []string {
+func (proxy *ProxyContext) ListAllActiveUserSessions(user string) []string {
 	return makeListOfSessionKeys(proxy.userSessions[user],false)
 }
 
 
 
-func (proxy *proxyContext) ListAllSessions() []string {
+func (proxy *ProxyContext) ListAllSessions() []string {
 	return makeListOfSessionKeys(proxy.allSessions,true)
 }
 
 
-func (proxy *proxyContext) ListAllActiveSessions() []string {
+func (proxy *ProxyContext) ListAllActiveSessions() []string {
 	return makeListOfSessionKeys(proxy.allSessions,false)
 }
 
@@ -543,14 +543,14 @@ func (proxy *proxyContext) ListAllActiveSessions() []string {
 
 // note: username/password combo is a 
 // unique key here
-type proxyUser struct {
+type ProxyUser struct {
 	Username	string
 	Password	string
 	RemoteHost	string
 	RemoteUsername string
 	RemotePassword string
-	eventCallbacks []*eventCallback
-	channelFilters []*channelFilterFunc
+	EventCallbacks []*EventCallback
+	channelFilters []*ChannelFilterFunc
 }
 
 
@@ -558,38 +558,38 @@ func buildProxyUserKey(user,pass string) string {
 	return user + ":" + pass
 }
 
-func (user *proxyUser) getKey() string {
+func (user *ProxyUser) GetKey() string {
 	return buildProxyUserKey(user.Username, "")
 }
 
-func (user *proxyUser) addEventCallback(callback *eventCallback) int {
-	if user.eventCallbacks == nil {
-		user.eventCallbacks = make([]*eventCallback,0)
+func (user *ProxyUser) AddEventCallback(callback *EventCallback) int {
+	if user.EventCallbacks == nil {
+		user.EventCallbacks = make([]*EventCallback,0)
 	}
-	user.eventCallbacks = append(user.eventCallbacks, callback)
-	return len(user.eventCallbacks) - 1
+	user.EventCallbacks = append(user.EventCallbacks, callback)
+	return len(user.EventCallbacks) - 1
 }
 
-func (user *proxyUser) removeEventCallback(callback *eventCallback) {
-	if user.eventCallbacks != nil {
-		for index, value := range user.eventCallbacks {
+func (user *ProxyUser) RemoveEventCallback(callback *EventCallback) {
+	if user.EventCallbacks != nil {
+		for index, value := range user.EventCallbacks {
 			if value == callback {
-				user.eventCallbacks[index] = user.eventCallbacks[len(user.eventCallbacks)-1]
-				user.eventCallbacks = user.eventCallbacks[:len(user.eventCallbacks)-1]
+				user.EventCallbacks[index] = user.EventCallbacks[len(user.EventCallbacks)-1]
+				user.EventCallbacks = user.EventCallbacks[:len(user.EventCallbacks)-1]
 			}
 		}
 	}
 }
 
-func (user *proxyUser) addChannelFilter(function *channelFilterFunc) int {
+func (user *ProxyUser) AddChannelFilter(function *ChannelFilterFunc) int {
 	if user.channelFilters == nil {
-		user.channelFilters = make([]*channelFilterFunc,0)
+		user.channelFilters = make([]*ChannelFilterFunc,0)
 	}
 	user.channelFilters = append(user.channelFilters, function)
 	return len(user.channelFilters) -1
 }
 
-func (user *proxyUser) removeChannelFilter(function *channelFilterFunc) {
+func (user *ProxyUser) RemoveChannelFilter(function *ChannelFilterFunc) {
 	if user.channelFilters != nil {
 		for index, value := range user.channelFilters {
 			if value == function {
