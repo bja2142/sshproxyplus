@@ -24,12 +24,12 @@ import (
 	"io"
 	"time"
 	"golang.org/x/crypto/ssh"
-	//"github.com/cmoog/sshproxy"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/x509"
 	"encoding/pem"
+	"encoding/binary"
 )
 
 var (
@@ -37,6 +37,10 @@ var (
 	// keys are "listen_ip:listen_port:client_ip:client:port"
 	SshSessions map[string]*session_context 
 )
+
+const SIGNAL_SESSION_END int = 0
+const SIGNAL_NEW_MESSAGE int = 1
+const SIGNAL_RESIZE_WINDOW int = 2
 
 // a proxy context should be modular
 // so that multiple proxies can be run in the same
@@ -63,7 +67,16 @@ type session_context struct {
 	channel_count		int
 	requests			[]*request_data
 	request_count		int
+	active				bool
+	thread_count		int
+	start_time   		time.Time
+	stop_time 	 		time.Time
+	msg_signal			[]chan int
+	term_rows			uint32
+	term_cols			uint32
 }
+// TODO: create a routine to remove a signal
+// so the signal list doesn't get crowded.
 
 
 func main() {
@@ -73,6 +86,8 @@ func main() {
 	SshSessions = map[string]*session_context{}
 
 	go start_proxy(cur_proxy)
+
+	go ServeWebSocketSessionServer("0.0.0.0:8080")
 
 	var input string
 	for {
@@ -85,6 +100,15 @@ func main() {
 
 }
 
+// TODO: add methods to session_context so I can dump session data to file (json) or to stdout``
+// TODO: add list of handlers to session to be called whenever new data is added to a session
+//			--> implied: for each session there is a thread that monitors some queue of new
+//			messages and forwards them to any active observers 
+// TODO: (after the above) add ability to query active sessions and get data for a session using
+// 		a web socket
+
+
+// TODO: get console width and height
 func start_proxy(context proxy_context) {
 	context.log.Printf("Starting proxy on socket %v:%v\n", *context.listen_ip, *context.listen_port)
 	config := &ssh.ServerConfig{
@@ -103,6 +127,10 @@ func start_proxy(context proxy_context) {
 		SshSessions[sess_key].channel_count = 0
 		SshSessions[sess_key].requests = make([]*request_data, 0)
 		SshSessions[sess_key].request_count = 0
+		SshSessions[sess_key].active = true
+		SshSessions[sess_key].thread_count = 0
+		SshSessions[sess_key].start_time = time.Now()
+		SshSessions[sess_key].msg_signal = make([]chan int,0)
 		SshSessions[sess_key].mutex.Unlock()
 		return nil, nil
 	},
@@ -140,6 +168,8 @@ func start_proxy(context proxy_context) {
 }
 
 func handle_channels(context * session_context, dest_conn ssh.Conn, channels <-chan ssh.NewChannel) {
+	context.thread_start()
+	defer context.thread_stop()
 	defer dest_conn.Close()
 	for cur_channel := range channels {
 		// reset the var scope for each goroutine; taken from https://github.com/cmoog/sshproxy/blob/master/reverseproxy.go#L87
@@ -152,6 +182,8 @@ func handle_channels(context * session_context, dest_conn ssh.Conn, channels <-c
 
 
 func forward_channel(context * session_context, dest_conn ssh.Conn, cur_channel ssh.NewChannel) {
+	context.thread_start()
+	defer context.thread_stop()
 	outgoing_channel, outgoing_requests, err := dest_conn.OpenChannel(cur_channel.ChannelType(), cur_channel.ExtraData())
 	if err != nil {
 		if openChanErr, ok := err.(*ssh.OpenChannelError); ok {
@@ -191,6 +223,8 @@ func forward_channel(context * session_context, dest_conn ssh.Conn, cur_channel 
 
 //TODO inject some wrapper for the reader so data gets stored
 func copy_channel(context * session_context, write_channel ssh.Channel, read_channel ssh.Channel, direction string, channel_type string) {
+	context.thread_start()
+	defer context.thread_stop()
 	defer func() { _ = write_channel.CloseWrite() }()
 	done_copying := make(chan struct{})
 
@@ -209,6 +243,8 @@ func copy_channel(context * session_context, write_channel ssh.Channel, read_cha
 }
 
 func bidirectional_channel_clone(context * session_context, incoming_channel ssh.Channel, outgoing_channel ssh.Channel,channel_type string) {
+	context.thread_start()
+	defer context.thread_stop()
 	incoming_write_done := make(chan struct{})
 	go func() {
 		defer close(incoming_write_done)
@@ -221,6 +257,8 @@ func bidirectional_channel_clone(context * session_context, incoming_channel ssh
 
 
 func handle_requests(context * session_context, outgoing_conn requestDest, incoming_requests <-chan *ssh.Request ) {
+	context.thread_start()
+	defer context.thread_stop()
 	for cur_request := range incoming_requests {
 		err := forward_request(context, outgoing_conn, cur_request)
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -229,14 +267,47 @@ func handle_requests(context * session_context, outgoing_conn requestDest, incom
 	}
 }
 
+// parseDims extracts two uint32s from the provided buffer.
+// https://github.com/Scalingo/go-ssh-examples/blob/ae24797273aa9fcd3a8fa6c624af1b068a81d58b/server_complex.go#L229
+func parseDims(b []byte) (uint32, uint32) {
+	w := binary.BigEndian.Uint32(b)
+	h := binary.BigEndian.Uint32(b[4:])
+	return w, h
+}
+
 // TODO switch fmt to context
 func forward_request(context * session_context, outgoing_channel requestDest, request *ssh.Request) error {
+	
+	context.thread_start()
+	defer context.thread_stop()
+	
 	
 	context.request_count += 1
 	context.requests = append(context.requests, &request_data{req_type: request.Type, req_payload: request.Payload})
 	if request.Type == "env" || request.Type == "shell" || request.Type == "exec" {
 		context.proxy.log.Printf("req.Type:%v, req.Payload:%v\n",request.Type,string(request.Payload))
+	} else {
+		context.proxy.log.Printf("req.Type:%v, req.Payload:%v\n",request.Type,request.Payload)
 	}
+	
+	if request.Type == "pty-req" {
+		//https://github.com/Scalingo/go-ssh-examples/blob/ae24797273aa9fcd3a8fa6c624af1b068a81d58b/server_complex.go#L206
+		if(len(request.Payload)>4) {
+			termLen := uint(request.Payload[3])
+			if len(request.Payload) >= (4 + int(termLen)+ 8) {
+				width, height := parseDims(request.Payload[termLen+4:])
+				context.term_rows = height
+				context.term_cols = width
+				context.proxy.log.Printf("New window row:%v, col:%v\n", height,width)
+			}
+		}					
+	} else if request.Type == "window-change" && len(request.Payload) >= 8 {
+		width, height := parseDims(request.Payload)
+		context.term_rows = height
+		context.term_cols = width
+		context.signal_resize_window()
+		context.proxy.log.Printf("New window row:%v, col:%v\n", height,width)
+	} 
 	ok, product, err := outgoing_channel.SendRequest(request.Type, request.WantReply, request.Payload)
 	if err != nil {
 		if request.WantReply {
@@ -262,8 +333,8 @@ func handle_client_conn(context proxy_context, client_conn *ssh.ServerConn, clie
 
 
 	sess_key := client_conn.LocalAddr().String()+":"+client_conn.RemoteAddr().String()
-	SshSessions[sess_key].mutex.Lock()
-	SshSessions[sess_key].mutex.Unlock()
+	SshSessions[sess_key].thread_start()
+	defer SshSessions[sess_key].thread_stop()
 	context.log.Printf("i can see password: %s\n",SshSessions[sess_key].client_password)
 	
 	// connect to client.
@@ -455,23 +526,107 @@ func (channel * channelWrapper) Read(buff []byte) (bytes_read int, err error) {
 		time_now := time.Now()
 		time_elapsed := time_now.Sub(channel.start_time).Milliseconds()
 		// reference: https://github.com/dutchcoders/sshproxy/blob/9b3ed8f5f5a7018c8dc09b4266e7f630683a9596/readers.go#L35
-		channel.context.proxy.log.Printf("dir: %v, type: %v, msec: %v, data(%v): %v\n", 
+		channel.context.proxy.log.Printf("dir: %v, type: %v, msec: %v, data(%v)\n", 
 		channel.direction, 
 		channel.data_type, 
 		time_elapsed, 
 		bytes_read, 
-		string(buff[:bytes_read]))
+		//string(buff[:bytes_read])
+	)
+
+		data_copy := make([]byte, bytes_read)
+	
+		copy(data_copy, buff)
+
 		channel.context.channels[channel.channel_id].chunks = append(channel.context.channels[channel.channel_id].chunks, 
 			block_chunk{
-				direction: channel.direction, 
-				channel_type: channel.data_type, 
-				time_offset: time_elapsed, 
-				size: bytes_read, 
-				data: buff[:bytes_read],
+				Direction: channel.direction, 
+				Channel_type: channel.data_type, 
+				Time_offset: time_elapsed, 
+				Size: bytes_read, 
+				Data: data_copy,
 			})
+		go channel.context.signal_new_message()
 	}
 
 	return bytes_read, err
+}
+
+
+func (context * session_context) send_signal_to_clients(signal int) {
+	for _, cur_signal := range context.msg_signal {
+		cur_signal <- signal
+	}
+}
+
+func (context * session_context) signal_new_message() {
+	context.send_signal_to_clients(SIGNAL_NEW_MESSAGE)
+}
+
+func (context * session_context) signal_session_end() {
+	context.send_signal_to_clients(SIGNAL_SESSION_END)
+}
+
+func (context * session_context) signal_resize_window() {
+	context.send_signal_to_clients(SIGNAL_RESIZE_WINDOW)
+}
+
+
+
+func (context * session_context) thread_start() {
+	context.mutex.Lock()
+	context.thread_count += 1
+	context.mutex.Unlock()
+}
+
+func (context * session_context) thread_stop() {
+	context.mutex.Lock()
+	context.thread_count -= 1
+	if context.thread_count < 1 {
+		context.active = false
+		context.stop_time = time.Now()
+		context.signal_session_end()
+	}
+	context.mutex.Unlock()
+}
+
+
+func (context * session_context) session_info_as_JSON() string {
+	return ""
+}
+
+func (context * session_context) new_signal() chan int {
+	new_msg_signal := make(chan int)
+	context.mutex.Lock()
+	context.msg_signal = append(context.msg_signal,new_msg_signal)
+	context.mutex.Unlock()
+	return new_msg_signal
+}
+
+
+func ListSessions() []string {
+	session_keys := make([]string, len(SshSessions))
+
+	index := 0
+	for cur_key := range SshSessions {
+		session_keys[index] = cur_key
+		index++
+	}
+
+	return session_keys
+}
+
+
+func ListActiveSessions() []string {
+	session_keys := make([]string, 0)
+
+	for cur_key := range SshSessions {
+		if SshSessions[cur_key].active == true {
+			session_keys = append(session_keys, cur_key)
+		}
+	}
+
+	return session_keys
 }
 
 
@@ -485,8 +640,8 @@ func newChannelWrapper(
 	) io.ReadWriter {
 	channel_index := context.channel_count
 	context.channels = append(context.channels, &channel_data{chunks: make([]block_chunk, 0), channel_type: channel_type})
-	//context.channels[channel_index].chunks = make([]block_chunk, 0)
 	context.channel_count += 1
+	
 	return &channelWrapper{ReadWriter: in_channel, context: context, direction: direction, data_type: data_type, start_time: start_time, channel_id: channel_index}
 }
 
@@ -500,11 +655,11 @@ type channel_data struct {
 	channel_type string
 }
 type block_chunk struct {
-	direction string
-	channel_type string
-	time_offset int64
-	size int
-	data []byte
+	Direction string `json:"direction"`
+	Channel_type string `json:"type"`
+	Time_offset int64 `json:"offset"`
+	Size int `json:"size"`
+	Data []byte `json:"data"`
 }
 
 
