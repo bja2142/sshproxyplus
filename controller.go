@@ -32,8 +32,8 @@ type ProxyController struct {
 	WebHost				string
 	WebStaticDir		string
 	BaseURI				string
-	log					LoggerInterface
-	defaultSigner		ssh.Signer
+	Log					LoggerInterface	`json:"-"`
+	DefaultSigner		ssh.Signer	`json:"-"`
 	channelFilters		map[string]*ChannelFilterFunc
 	EventCallbacks		map[string]*EventCallback
 }
@@ -60,10 +60,10 @@ func (controller *ProxyController) clientHandler(client ProxyControllerSocketCli
 			if (err == nil) {
 				data = message.HandleMessage(controller)
 			} else {
-				controller.log.Println("error during verify", err)
+				controller.Log.Println("error during verify", err)
 			}
 		}  else {
-			controller.log.Println("error during unmarshal",err)
+			controller.Log.Println("error during unmarshal",err)
 		}
 		// echo back commands on error
 		err = client.SendLine(data)
@@ -80,7 +80,7 @@ func (controller *ProxyController) clientHandler(client ProxyControllerSocketCli
 func (controller *ProxyController) handleWebProxyRequest(w http.ResponseWriter, r *http.Request) {
 	id := r.URL.Query().Get("id")
 	numericID,err := strconv.ParseUint(id, 10, 64)
-	controller.log.Printf("Got websocket request for proxy with id: %v\n",numericID)
+	controller.Log.Printf("Got websocket request for proxy with id: %v\n",numericID)
 	if err != nil {
 		numericID = 0
 	}
@@ -110,15 +110,15 @@ func (controller *ProxyController) StartWebServer() error {
 	}
 	var err error
 	if controller.socket.IsPlaintext() {
-		controller.log.Printf("Starting plaintext web server: %v\n",controller.WebHost)
+		controller.Log.Printf("Starting plaintext web server: %v\n",controller.WebHost)
 		err = controller.webServer.ListenAndServe()
 	} else {
-		controller.log.Printf("Starting TLS web server: %v\n",controller.WebHost)
+		controller.Log.Printf("Starting TLS web server: %v\n",controller.WebHost)
 		err = controller.webServer.ListenAndServeTLS(controller.TLSCert, controller.TLSKey)
 	}
 
 	if (err != nil)	{
-		controller.log.Println(err.Error())
+		controller.Log.Println(err.Error())
 		return err
 	} 
 	return nil
@@ -127,7 +127,7 @@ func (controller *ProxyController) StartWebServer() error {
 func (controller *ProxyController) ExportControllerAsJSON() ([]byte, error) {
 	data, err := json.MarshalIndent(controller,"","    ")
 	if err != nil {
-		controller.log.Println("Error during marshaling json: ", err)
+		controller.Log.Println("Error during marshaling json: ", err)
 		return []byte(""), err
 	}
 	return data, err
@@ -138,9 +138,9 @@ func (controller *ProxyController) WriteControllerConfigToFile(filepath string) 
 	if err == nil {
 		err = os.WriteFile(filepath, data, 0600)
 		if(err != nil) {
-			controller.log.Println("Error writing to file:",err)
+			controller.Log.Println("Error writing to file:",err)
 		} else {
-			controller.log.Printf("Wrote config to file:%v\n",filepath)
+			controller.Log.Printf("Wrote config to file:%v\n",filepath)
 		}
 	}
 	return err
@@ -159,7 +159,7 @@ func LoadControllerConfigFromFile(filepath string, signer ssh.Signer) (error, *P
 
 	if err == nil {
 		if signer != nil {
-			controller.defaultSigner = signer
+			controller.DefaultSigner = signer
 		}
 
 		controller.Initialize()
@@ -173,15 +173,15 @@ func LoadControllerConfigFromFile(filepath string, signer ssh.Signer) (error, *P
 
 func (controller *ProxyController) UpdateProxiesWithCurrentLogger(overwrite bool) {
 	for _,proxy := range controller.Proxies {
-		if proxy.log == nil || overwrite {
-			proxy.log = controller.log
+		if proxy.Log == nil || overwrite {
+			proxy.Log = controller.Log
 		}
 		
 	}
 }
 
 func (controller *ProxyController) UseNewLogger(logger LoggerInterface) {
-	controller.log = logger
+	controller.Log = logger
 	controller.UpdateProxiesWithCurrentLogger(true)
 
 }
@@ -196,7 +196,7 @@ func (controller *ProxyController) StopWebServer() {
 
 func (controller *ProxyController) Initialize() {
 
-	if nil == controller.log {
+	if nil == controller.Log {
 		controller.UseNewLogger(log.Default())
 	}
 
@@ -210,16 +210,16 @@ func (controller *ProxyController) Initialize() {
 		controller.Proxies = make(map[uint64]*ProxyContext)
 	}
 
-	if controller.defaultSigner == nil {
+	if controller.DefaultSigner == nil {
 		var err error
-		controller.defaultSigner, err = generateSigner()
+		controller.DefaultSigner, err = GenerateSigner()
 		if err != nil {
-			controller.log.Println("unable generate signer: ", err)
+			controller.Log.Println("unable generate signer: ", err)
 		}
 	}
 
 	for _, proxy := range controller.Proxies {
-		proxy.Initialize(controller.defaultSigner)
+		proxy.Initialize(controller.DefaultSigner)
 	}
 	controller.UpdateProxiesWithCurrentLogger(false)
 	
@@ -264,11 +264,11 @@ func (controller *ProxyController) GetNextProxyID() uint64 {
 }
 
 func (controller *ProxyController) CreateProxy() uint64 {
-	return controller.AddProxy(MakeNewProxy(controller.defaultSigner))
+	return controller.AddProxy(MakeNewProxy(controller.DefaultSigner))
 }
 
 func (controller *ProxyController) AddProxyFromJSON(data []byte) (error,uint64) {
-	err,newProxy := makeProxyFromJSON(data, controller.defaultSigner)
+	err,newProxy := makeProxyFromJSON(data, controller.DefaultSigner)
 	var proxyID uint64
 	if (err == nil) {
 		proxyID = controller.AddProxy(newProxy)
@@ -340,7 +340,7 @@ func (controller *ProxyController) GetProxy(proxyID uint64) (proxy *ProxyContext
 
 func (controller *ProxyController) AddProxy(proxy *ProxyContext) uint64 {
 	proxy_id := controller.AddExistingProxy(proxy)
-	controller.Proxies[proxy_id].log = controller.log
+	controller.Proxies[proxy_id].Log = controller.Log
 	return proxy_id
 }
 
@@ -593,7 +593,7 @@ func (controller *ProxyController) removeViewerFromProxy(proxyID uint64, viewerK
 
 
 // taken from: https://github.com/cmoog/sshproxy/blob/5448845f823a2e6ec7ba6bb7ddf1e5db786410d4/_examples/main.go
-func generateSigner() (ssh.Signer, error) { 
+func GenerateSigner() (ssh.Signer, error) { 
 	const blockType = "EC PRIVATE KEY"
 	pkey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
 	if err != nil {

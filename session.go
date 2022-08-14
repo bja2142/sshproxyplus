@@ -110,7 +110,7 @@ func (session * SessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel s
 		})
 	if ! channelTypeSupported(cur_channel.ChannelType()) {
 		_ = cur_channel.Reject(ssh.ConnectionFailed, "Unable to open channel.")
-		session.proxy.log.Printf("Rejecting channel type: %v\n", cur_channel.ChannelType())
+		session.proxy.Log.Printf("Rejecting channel type: %v\n", cur_channel.ChannelType())
 		return
 	}
 	outgoing_channel, outgoing_requests, err := dest_conn.OpenChannel(cur_channel.ChannelType(), cur_channel.ExtraData())
@@ -121,15 +121,15 @@ func (session * SessionContext) forwardChannel(dest_conn ssh.Conn, cur_channel s
 			_ = cur_channel.Reject(ssh.ConnectionFailed, err.Error())
 		}
 		
-		session.proxy.log.Printf("error open channel: t:%v p:%v - %v\n", cur_channel.ChannelType(), cur_channel.ExtraData(),err)
+		session.proxy.Log.Printf("error open channel: t:%v p:%v - %v\n", cur_channel.ChannelType(), cur_channel.ExtraData(),err)
 		return
 	}
-	session.proxy.log.Printf("Opening channel of type: %v\n", cur_channel.ChannelType())
+	session.proxy.Log.Printf("Opening channel of type: %v\n", cur_channel.ChannelType())
 	defer outgoing_channel.Close()
 
 	incoming_channel, incoming_requests, err := cur_channel.Accept()
 	if err != nil {
-		session.proxy.log.Printf("error accept new channel: %v\n", err)
+		session.proxy.Log.Printf("error accept new channel: %v\n", err)
 		return
 	}
 	defer incoming_channel.Close()
@@ -160,12 +160,12 @@ func (session * SessionContext) copyChannel(write_channel ssh.Channel, read_chan
 		defer close(done_copying)
 		_, err := io.Copy(write_channel, newChannelWrapper(read_channel,session, direction, "stdout", time.Now(), channel_type, channel_id))
 		if err != nil && !errors.Is(err, io.EOF) {
-			session.proxy.log.Printf("channel copy error: %v\n", err)
+			session.proxy.Log.Printf("channel copy error: %v\n", err)
 		}
 	}()
 	_, err := io.Copy(write_channel.Stderr(), newChannelWrapper(read_channel.Stderr(),session, direction,"stderr", time.Now(), channel_type, channel_id))
 	if err != nil && !errors.Is(err, io.EOF) {
-		session.proxy.log.Printf("channel copy error: %v\n", err)
+		session.proxy.Log.Printf("channel copy error: %v\n", err)
 	}
 	<-done_copying
 }
@@ -190,7 +190,7 @@ func (session * SessionContext) handleRequests(outgoing_conn requestDest, incomi
 	for cur_request := range incoming_requests {
 		err := session.forwardRequest(outgoing_conn, cur_request, channel_id)
 		if err != nil && !errors.Is(err, io.EOF) {
-			session.proxy.log.Printf("handle request error: %v", err)
+			session.proxy.Log.Printf("handle request error: %v", err)
 		}
 	}
 }
@@ -216,9 +216,9 @@ func (session * SessionContext) forwardRequest(outgoing_channel requestDest, req
 	
 	session.requests = append(session.requests, request_entry)
 	if request.Type == "env" || request.Type == "shell" || request.Type == "exec" {
-		session.proxy.log.Printf("req.Type:%v, req.Payload:%v\n",request.Type,string(request.Payload))
+		session.proxy.Log.Printf("req.Type:%v, req.Payload:%v\n",request.Type,string(request.Payload))
 	} else {
-		session.proxy.log.Printf("req.Type:%v, req.Payload:%v\n",request.Type,request.Payload)
+		session.proxy.Log.Printf("req.Type:%v, req.Payload:%v\n",request.Type,request.Payload)
 	}
 	
 	if request.Type == "pty-req" {
@@ -236,7 +236,7 @@ func (session * SessionContext) forwardRequest(outgoing_channel requestDest, req
 						TermCols: session.term_cols,
 						RequestID: request_id,
 					})
-				session.proxy.log.Printf("Window row:%v, col:%v\n", height,width)
+				session.proxy.Log.Printf("Window row:%v, col:%v\n", height,width)
 			}
 		}					
 	} else if request.Type == "window-change" && len(request.Payload) >= 8 {
@@ -250,10 +250,10 @@ func (session * SessionContext) forwardRequest(outgoing_channel requestDest, req
 				TermCols: session.term_cols,
 				RequestID: request_id,
 			})
-		session.proxy.log.Printf("New window row:%v, col:%v\n", height,width)
+		session.proxy.Log.Printf("New window row:%v, col:%v\n", height,width)
 	}
 	if (request.Type == "no-more-sessions@openssh.com" || request.Type == "hostkeys-00@openssh.com" ) {
-		session.proxy.log.Printf("skipping: %v",request.Type);
+		session.proxy.Log.Printf("skipping: %v",request.Type);
 	} else {
 		ok, product, err := outgoing_channel.SendRequest(request.Type, request.WantReply, request.Payload)
 		if err != nil {
@@ -347,7 +347,7 @@ func (session * SessionContext) InfoAsJSON() string {
 	}
 	data, err := json.Marshal(session_info)
 	if err != nil {
-		session.proxy.log.Println("Error during marshaling json: ", err)
+		session.proxy.Log.Println("Error during marshaling json: ", err)
 		return ""
 	}
 	return string(data)
@@ -364,7 +364,7 @@ func (session * SessionContext) GetTimeOffset() int64 {
 func (session * SessionContext) initializeLog()  {
 	f, err := os.OpenFile(session.proxy.SessionFolder + "/" + session.filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		session.proxy.log.Println("error opening session log file:", err)
+		session.proxy.Log.Println("error opening session log file:", err)
 	}
 	session.mutex.Lock()
 		session.log_fd = f
@@ -376,7 +376,7 @@ func (session * SessionContext) appendToLog(data []byte) {
 	session.log_mutex.Lock()
 	if _, err := session.log_fd.Write(data); err != nil {
 		session.log_fd.Close() // ignore error; Write error takes precedence
-		session.proxy.log.Println("error writing to log file:", err)
+		session.proxy.Log.Println("error writing to log file:", err)
 	}
 	session.log_mutex.Unlock()
 }
@@ -384,14 +384,14 @@ func (session * SessionContext) appendToLog(data []byte) {
 func (session * SessionContext) finalizeLog()  {
 	session.appendToLog([]byte("\n]"))
 	if err := session.log_fd.Close(); err != nil {
-		session.proxy.log.Println("error closing log file:", err)
+		session.proxy.Log.Println("error closing log file:", err)
 	}
 	if(len(session.events)<10) {
 		old_file := session.proxy.SessionFolder + "/" + session.filename
 		new_file := old_file + ".scan"
 		err := os.Rename(old_file,new_file)
 		if err != nil {
-			session.proxy.log.Printf("Error moving log file from %v to %v: %v",old_file, new_file, err)
+			session.proxy.Log.Printf("Error moving log file from %v to %v: %v",old_file, new_file, err)
 		}
 		session.filename = new_file
 	}

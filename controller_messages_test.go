@@ -175,7 +175,7 @@ func simulateMessage(message *ControllerMessage, controller *ProxyController, t 
 	if messageType != expectedMessageReplyType {
 		t.Errorf("*ControllerMessage handleMessage() did not craft correct reply; expected MessageType %s, got %s", expectedMessageReplyType, messageType)
 	}
-	//controller.log.Println(string(reply))
+	//controller.Log.Println(string(reply))
 	return replyObj
 }
 
@@ -309,7 +309,7 @@ func TestMessageListProxies(t *testing.T) {
 	proxyCount := 3
 
 	for i:=0; i < proxyCount; i++  {
-		proxy0 := MakeNewProxy(controller.defaultSigner)
+		proxy0 := MakeNewProxy(controller.DefaultSigner)
 		controller.AddExistingProxy(proxy0)
 	}
 
@@ -354,7 +354,7 @@ func TestMessageGetProxyInfo(t *testing.T) {
 	testString := "1.1.1.1"
 
 	for i := uint64(0); i < proxyCount; i++  {
-		proxy := MakeNewProxy(controller.defaultSigner)
+		proxy := MakeNewProxy(controller.DefaultSigner)
 		if i == proxyIDToSend {
 			proxy.ListenIP = testString
 		}
@@ -396,7 +396,7 @@ func TestMessageGetProxyInfo(t *testing.T) {
 
 func TestMessageGetProxyViewerUsingSecret(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -458,7 +458,7 @@ func TestMessageGetProxyViewerUsingSecret(t *testing.T) {
 
 func TestMessageGetProxyViewerUsingSessionKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -525,7 +525,7 @@ func TestMessageGetProxyViewerUsingSessionKey(t *testing.T) {
 
 func TestMessageGetProxyViewerUsingUsername(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -584,7 +584,7 @@ func TestMessageGetProxyViewerUsingUsername(t *testing.T) {
 
 func TestMessageGetProxyViewerErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -622,7 +622,7 @@ func TestMessageGetProxyViewerErrorCondition(t *testing.T) {
 
 func TestMessageGetProxyViewersUsingSessionKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -682,7 +682,7 @@ func TestMessageGetProxyViewersUsingSessionKey(t *testing.T) {
 
 func TestMessageGetProxyViewersUsingUsername(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -741,7 +741,7 @@ func TestMessageGetProxyViewersUsingUsername(t *testing.T) {
 
 func TestMessageGetProxyViewers(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -809,7 +809,7 @@ func TestMessageGetProxyViewers(t *testing.T) {
 
 func TestMessageCreateNewSessionProxyViewer(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -868,7 +868,7 @@ func TestMessageCreateNewSessionProxyViewer(t *testing.T) {
 
 func TestMessageCreateNewUserProxyViewer(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -922,7 +922,7 @@ func TestMessageCreateNewUserProxyViewer(t *testing.T) {
 
 func TestMessageCreateNewViewerErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -949,7 +949,7 @@ func TestMessageCreateNewViewerErrorCondition(t *testing.T) {
 
 func TestMessageAddProxyUser(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -987,7 +987,7 @@ func TestMessageAddProxyUser(t *testing.T) {
 
 func TestMessageAddProxyUserErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 
 	message := &ControllerMessage{
@@ -1007,7 +1007,7 @@ func TestMessageAddProxyUserErrorCondition(t *testing.T) {
 
 func TestMessageRemoveProxyUser(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -1041,7 +1041,7 @@ func TestMessageRemoveProxyUser(t *testing.T) {
 
 func TestMessageAddChannelFilter(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -1095,7 +1095,7 @@ func TestMessageAddChannelFilter(t *testing.T) {
 
 func TestMessageAddChannelFilterErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 
 	message := &ControllerMessage{
@@ -1116,7 +1116,7 @@ func TestMessageAddChannelFilterErrorCondition(t *testing.T) {
 
 func TestMessageRemoveChannelFilter(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -1159,7 +1159,7 @@ func TestMessageRemoveChannelFilter(t *testing.T) {
 
 func TestMessageRemoveChannelFilterErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 
 	message := &ControllerMessage{
@@ -1200,7 +1200,7 @@ func TestMessageAddUserCallback(t *testing.T) {
 
 	defer callbackServer.Close()
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -1258,7 +1258,7 @@ func TestMessageAddUserCallback(t *testing.T) {
 
 func TestMessageRemoveUserCallback(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -1298,7 +1298,7 @@ func TestMessageRemoveUserCallback(t *testing.T) {
 
 func TestMessageRemoveUserCallbackErrorCondition(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 
 	message := &ControllerMessage{

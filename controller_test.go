@@ -38,7 +38,7 @@ func makeNewController() *ProxyController {
 		Proxies: make(map[uint64]*ProxyContext),
 		WebHost: "127.0.0.1:"+port.Add(port,big.NewInt(1)).Text(10),
 		WebStaticDir: ".",
-		log: log.Default(),
+		Log: log.Default(),
 	}
 	controller.Initialize()
 	return controller
@@ -276,7 +276,7 @@ func TestControllerStartAndStopProxy(t *testing.T) {
 func TestControllerAddAndGetProxySingle(t *testing.T) {
 	controller := makeNewController()
 
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 
 	var expectedProxyID uint64 = 5
 	controller.ProxyCounter = expectedProxyID
@@ -301,9 +301,9 @@ func TestControllerAddAndGetProxySingle(t *testing.T) {
 func TestControllerAddAndGetProxyMultiple(t *testing.T) {
 	controller := makeNewController()
 
-	proxy0 := MakeNewProxy(controller.defaultSigner)
-	proxy1 := MakeNewProxy(controller.defaultSigner)
-	proxy2 := MakeNewProxy(controller.defaultSigner)
+	proxy0 := MakeNewProxy(controller.DefaultSigner)
+	proxy1 := MakeNewProxy(controller.DefaultSigner)
+	proxy2 := MakeNewProxy(controller.DefaultSigner)
 
 
 	proxyID0 := controller.AddExistingProxy(proxy0)
@@ -331,7 +331,7 @@ func TestControllerAddAndGetProxyMultiple(t *testing.T) {
 func TestControllerGetProxyErrorConditionWrongID(t *testing.T) {
 	controller := makeNewController()
 
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 
 	var fakeProxyID  uint64 = 10
 	
@@ -347,9 +347,9 @@ func TestControllerGetProxyErrorConditionWrongID(t *testing.T) {
 func TestControllerDestroyProxy(t *testing.T) {
 	controller := makeNewController()
 
-	proxy0 := MakeNewProxy(controller.defaultSigner)
-	proxy1 := MakeNewProxy(controller.defaultSigner)
-	proxy2 := MakeNewProxy(controller.defaultSigner)
+	proxy0 := MakeNewProxy(controller.DefaultSigner)
+	proxy1 := MakeNewProxy(controller.DefaultSigner)
+	proxy2 := MakeNewProxy(controller.DefaultSigner)
 
 
 	proxyID0 := controller.AddExistingProxy(proxy0)
@@ -389,7 +389,7 @@ func TestControllerDestroyProxy(t *testing.T) {
 func TestControllerActivateProxy(t *testing.T) {
 	controller := makeNewController()
 
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	
 	proxyID := controller.AddExistingProxy(proxy)
 
@@ -409,7 +409,7 @@ func TestControllerActivateProxy(t *testing.T) {
 func TestControllerDeactivateProxy(t *testing.T) {
 	controller := makeNewController()
 
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	
 	proxyID := controller.AddExistingProxy(proxy)
 
@@ -429,7 +429,7 @@ func TestControllerDeactivateProxy(t *testing.T) {
 
 func TestControllerCreateAndGetProxyViewerByViewerKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -466,7 +466,7 @@ func TestControllerCreateAndGetProxyViewerByViewerKey(t *testing.T) {
 
 func TestControllerCreateAndGetProxyViewerBySessionKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -501,7 +501,7 @@ func TestControllerCreateAndGetProxyViewerBySessionKey(t *testing.T) {
 
 func TestControllerCreateAndGetProxyViewerByUsername(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -537,7 +537,7 @@ func TestControllerCreateAndGetProxyViewerByUsername(t *testing.T) {
 
 func TestControllerCreateAndGetProxyViewersBySessionKey(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -574,7 +574,7 @@ func TestControllerCreateAndGetProxyViewersBySessionKey(t *testing.T) {
 
 func TestControllerCreateAndGetProxyViewersByUsername(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -628,7 +628,7 @@ func TestControllerCreateAndGetProxyViewersByUsername(t *testing.T) {
 func TestAddAndRemoveProxyUser(t *testing.T) {
 
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -883,7 +883,7 @@ func TestControllerListenWebTLS(t *testing.T) {
 func TestControllerStartWebServerPlaintext(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	controller.AddExistingProxy(proxy)
 	go controller.StartWebServer()
 	defer controller.StopWebServer()
@@ -918,7 +918,7 @@ func TestControllerStartWebServerTLS(t *testing.T) {
 	controller.TLSCert = testCert
 	controller.SocketType = PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	controller.AddExistingProxy(proxy)
 	go controller.StartWebServer()
 	defer controller.StopWebServer()
@@ -947,7 +947,7 @@ func TestControllerStartWebServerTLS(t *testing.T) {
 
 func TestAddAndRemoveChannelFilterFromUsery(t *testing.T) {
 	controller := makeNewController()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxyID := controller.AddExistingProxy(proxy)
 	user:= &ProxyUser{
 		Username: "testuser",
@@ -1014,7 +1014,7 @@ func TestControllerFullIntegration(t *testing.T) {
 	defer controller.StopWebServer()
 
 
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxy.DefaultRemotePort = int(dummyServer.port.Int64())
 	proxy.ListenPort =  int(newRandomPort().Int64())
 	proxy.active = true

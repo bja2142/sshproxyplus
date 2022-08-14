@@ -22,7 +22,7 @@ import (
 func TestWebServerRouteListActive(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	controller.AddExistingProxy(proxy)
 
 	proxySessionActiveKey := "active-session"
@@ -88,7 +88,7 @@ func TestWebServerRouteListActive(t *testing.T) {
 func TestWebServerRouteListActivePublicAccessDisabled(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxy.PublicAccess = false
 	controller.AddExistingProxy(proxy)
 
@@ -135,7 +135,7 @@ func TestWebServerRouteListAll(t *testing.T) {
 
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	controller.AddExistingProxy(proxy)
 
 	proxySessionActiveKey := "active-session"
@@ -196,7 +196,7 @@ func TestWebServerRouteListAll(t *testing.T) {
 func TestWebServerRouteListAllPublicAccessDisabled(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxy.PublicAccess = false
 	controller.AddExistingProxy(proxy)
 
@@ -242,7 +242,7 @@ func TestWebServerRouteListAllPublicAccessDisabled(t *testing.T) {
 func TestWebServerRouteViewerList(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxy.PublicAccess = false
 	controller.AddExistingProxy(proxy)
 
@@ -349,7 +349,7 @@ func TestWebServerRouteViewerList(t *testing.T) {
 func TestWebServerRouteViewerGet(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxy.PublicAccess = true
 	controller.AddExistingProxy(proxy)
 
@@ -480,7 +480,7 @@ func TestWebServerRouteViewerGet(t *testing.T) {
 func TestWebServerRouteViewerGetSingle(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxy.PublicAccess = true
 	controller.AddExistingProxy(proxy)
 
@@ -614,7 +614,7 @@ func TestWebServerRouteViewerGetSingle(t *testing.T) {
 func TestWebServerRouteGet(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxy.PublicAccess = false
 	controller.AddExistingProxy(proxy)
 

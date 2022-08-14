@@ -29,7 +29,7 @@ type ProxyContext struct {
 	ListenIP			string
 	ListenPort			int
 	private_key			ssh.Signer
-	log					LoggerInterface
+	Log					LoggerInterface `json:"-"`
 	SessionFolder		string
 	TLSCert				string
 	TLSKey				string
@@ -61,7 +61,7 @@ type LoggerInterface interface {
 
 func MakeNewProxy(signer ssh.Signer) *ProxyContext {
 	return &ProxyContext{
-		log: log.Default(),
+		Log: log.Default(), 
 		Users: map[string]*ProxyUser{},
 		userSessions: map[string]map[string]*SessionContext{},
 		allSessions: map[string]*SessionContext{},
@@ -80,7 +80,7 @@ func MakeNewProxy(signer ssh.Signer) *ProxyContext {
 
 func (proxy *ProxyContext) StartProxy() {
 
-	proxy.log.Printf("Starting proxy on socket %v:%v\n", proxy.ListenIP, proxy.ListenPort)
+	proxy.Log.Printf("Starting proxy on socket %v:%v\n", proxy.ListenIP, proxy.ListenPort)
 	config := &ssh.ServerConfig{
 	NoClientAuth: false,
 	MaxAuthTries: 3,
@@ -88,7 +88,7 @@ func (proxy *ProxyContext) StartProxy() {
 	// need the session key
 	PasswordCallback: func(conn ssh.ConnMetadata, password []byte) (*ssh.Permissions, error) {
 		
-		proxy.log.Printf("Got client (%s) using creds (%s:%s)\n",
+		proxy.Log.Printf("Got client (%s) using creds (%s:%s)\n",
 		conn.RemoteAddr(),
 		conn.User(),
 		password)
@@ -98,7 +98,7 @@ func (proxy *ProxyContext) StartProxy() {
 		err, user := proxy.AuthenticateUser(conn.User(),string(password))
 
 		if(err != nil) {
-			proxy.log.Printf("authentication failed: %v\n",err)
+			proxy.Log.Printf("authentication failed: %v\n",err)
 			return nil, err
 		}
 
@@ -189,17 +189,21 @@ func (proxy *ProxyContext) Deactivate() {
 	proxy.active = false
 }
 
+func (proxy *ProxyContext) IsActive() bool {
+	return proxy.active 
+}
+
 func (proxy *ProxyContext) AddSessionToSessionList(session * SessionContext) {
 	filename := SESSION_LIST_FN
 	fd, err := os.OpenFile(proxy.SessionFolder + "/" + filename, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
-		proxy.log.Println("error opening session list file:", err)
+		proxy.Log.Println("error opening session list file:", err)
 	}
 	if _, err := fd.WriteString(session.InfoAsJSON() + "\n"); err != nil {
-		proxy.log.Println("error writing to session list file:", err)
+		proxy.Log.Println("error writing to session list file:", err)
 	}
 	if err := fd.Close(); err != nil {
-		proxy.log.Println("error closing session list file:", err)
+		proxy.Log.Println("error closing session list file:", err)
 	}
 	
 }
@@ -279,7 +283,7 @@ func (proxy *ProxyContext) AuthenticateUser(username,password string) (error, *P
 			
 		} else {
 			if password_blank {
-				proxy.log.Printf("allowing any password for user: %v\n", username)
+				proxy.Log.Printf("allowing any password for user: %v\n", username)
 			} 
 			return nil, user
 		}
@@ -304,8 +308,8 @@ func makeProxyFromJSON(data []byte, signer ssh.Signer) (error, *ProxyContext) {
 
 func (proxy *ProxyContext) Initialize(defaultSigner ssh.Signer) {
 
-	if (proxy.log == nil) {
-		proxy.log = log.Default()
+	if (proxy.Log == nil) {
+		proxy.Log = log.Default()
 	}
 
 	if proxy.Users == nil {
@@ -349,7 +353,7 @@ func (proxy *ProxyContext) HandleClientConn(client_conn *ssh.ServerConn, client_
 	curSession.markThreadStarted()
 	curSession.initializeLog()
 	defer curSession.markThreadStopped()
-	proxy.log.Printf("i can see password: %s\n",curSession.client_password)
+	proxy.Log.Printf("i can see password: %s\n",curSession.client_password)
 	
 	// connect to client.
 
@@ -363,7 +367,7 @@ func (proxy *ProxyContext) HandleClientConn(client_conn *ssh.ServerConn, client_
 	}
 	remote_sock, err := net.DialTimeout("tcp", curSession.user.RemoteHost, 5000000000)
 	if err != nil {
-		proxy.log.Printf("Error: cannot connect to remote server %s\n",curSession.user.RemoteHost)
+		proxy.Log.Printf("Error: cannot connect to remote server %s\n",curSession.user.RemoteHost)
 		return
 	}
 
@@ -372,7 +376,7 @@ func (proxy *ProxyContext) HandleClientConn(client_conn *ssh.ServerConn, client_
 	remote_conn, remote_channels, remote_requests, err := ssh.NewClientConn(remote_sock, curSession.user.RemoteHost, remote_server_conf)
 
 	if err != nil {
-		proxy.log.Printf("Error creating new ssh client conn %v\n", err)
+		proxy.Log.Printf("Error creating new ssh client conn %v\n", err)
 		return 
 	}
 
@@ -399,7 +403,7 @@ func (proxy *ProxyContext) HandleClientConn(client_conn *ssh.ServerConn, client_
 	}
 	curSession.HandleEvent(&start_event)
 		
-	proxy.log.Printf("New session starting: %v\n",start_event.ToJSON())
+	proxy.Log.Printf("New session starting: %v\n",start_event.ToJSON())
 	for {
 		if (proxy.active) {
 			break;
@@ -415,7 +419,7 @@ func (proxy *ProxyContext) HandleClientConn(client_conn *ssh.ServerConn, client_
 	go curSession.handleRequests(client_conn, remote_requests, 0)
 	go curSession.handleRequests(remote_conn, client_requests, 0)
 	
-	proxy.log.Println("New session started")
+	proxy.Log.Println("New session started")
 
 	<-shutdown_err
 	remote_conn.Close()

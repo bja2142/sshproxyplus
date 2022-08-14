@@ -65,7 +65,7 @@ func (session * SessionContext) AddEvent(event *SessionEvent) *SessionEvent{
 func (session * SessionContext) LogEvent(event *SessionEvent) {
 	json_data, err := json.Marshal(event)
 	if err != nil {
-		session.proxy.log.Println("Error during marshaling json: ", err)
+		session.proxy.Log.Println("Error during marshaling json: ", err)
 		return 
 	}
 	var data []byte

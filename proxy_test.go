@@ -33,7 +33,7 @@ func makeNewTestProxy() *ProxyContext {
 
 	
 	return &ProxyContext{
-		log: log.Default(),
+		Log: log.Default(), 
 		Users: map[string]*ProxyUser{},
 		userSessions: map[string]map[string]*SessionContext{},
 		allSessions: map[string]*SessionContext{},
@@ -274,7 +274,7 @@ func (self *testSSHServer) listen() {
 			self.messages = make([][]byte,0)
 		}
 		if self.key == nil {
-			self.key, err = generateSigner()
+			self.key, err = GenerateSigner()
 			if err != nil {
 				self.t.Fatalf("Cannot generate ssh key for test: %s",err)
 			}
@@ -461,7 +461,7 @@ func TestProxy(t *testing.T) {
 	defer dummyServer.stop()
 // start dummy ssh server
 // https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
-	signer, err := generateSigner()
+	signer, err := GenerateSigner()
 	proxy := MakeNewProxy(signer)
 	proxy.DefaultRemotePort = int(dummyServer.port.Int64())
 	proxy.ListenPort =  int(newRandomPort().Int64())
@@ -595,7 +595,7 @@ func TestProxyRequestPty(t *testing.T) {
 	defer dummyServer.stop()
 // start dummy ssh server
 // https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
-	signer, err := generateSigner()
+	signer, err := GenerateSigner()
 	proxy := MakeNewProxy(signer)
 	proxy.DefaultRemotePort = int(dummyServer.port.Int64())
 	proxy.ListenPort =  int(newRandomPort().Int64())
@@ -660,7 +660,7 @@ func TestProxyWindowChange(t *testing.T) {
 	defer dummyServer.stop()
 // start dummy ssh server
 // https://blog.gopheracademy.com/advent-2015/ssh-server-in-go/
-	signer, err := generateSigner()
+	signer, err := GenerateSigner()
 	proxy := MakeNewProxy(signer)
 	proxy.DefaultRemotePort = int(dummyServer.port.Int64())
 	proxy.ListenPort =  int(newRandomPort().Int64())
@@ -709,7 +709,7 @@ func TestProxyWindowChange(t *testing.T) {
 func TestListSessionsSingle(t *testing.T) {
 	controller := makeNewController()
 	controller.InitializeSocket()
-	proxy := MakeNewProxy(controller.defaultSigner)
+	proxy := MakeNewProxy(controller.DefaultSigner)
 	proxy.PublicAccess = true
 	controller.AddExistingProxy(proxy)
 
