@@ -40,6 +40,12 @@ For usage:
 go run _example/sshproxyplus.go --help
 ```
 
+Tests:
+
+```
+go test -cover
+```
+
 ### Launching Static HTML server
 
 ``` 
