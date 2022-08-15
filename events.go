@@ -13,7 +13,13 @@ const EVENT_WINDOW_RESIZE 	string = "window-resize"
 const EVENT_MESSAGE	 		string = "new-message"
 
 
-
+/*
+SessionEvents are the meat of an SSH Session.
+They track the start and stop of a session,
+when new requests or channels are created,
+when a window is resized, and when
+data is transmitted as a message. 
+*/
 type SessionEvent struct {
 	Type 			string 		`json:"type"`
 	Key  			string     	`json:"key,omitempty"`

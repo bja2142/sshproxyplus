@@ -36,6 +36,20 @@ sequentially by numerical value.
 //var sessionIDCounter uint64 = 0
 
 // session context
+// each session proxies data from
+// the client to the remote server.
+// everything that occurs during the
+// session is logged in the list of events.
+
+//  The SessionContext tracks the
+// remote client username and password
+// used when authenticating, the
+// ProxyUser associated with this
+// session, and a list of events
+// that occur. 
+
+// Every event is also written to a log
+// file as it occurs. 
 type SessionContext struct {
 	proxy				*ProxyContext
 	mutex				sync.Mutex

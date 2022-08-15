@@ -11,11 +11,22 @@ import (
 	"net/http"
 )
 
+
+/*
+ A signed message for the controller.
+ The Message is a JSON blob
+ The HMAC is a signed hash of the Message
+*/
 type ControllerHMAC struct {
 	Message []byte
 	HMAC	[]byte
 }
 
+/*
+ A message for the controller.
+ If a field isn't used for a particular 
+ message type, it is omitted. 
+*/
 type ControllerMessage struct {
 	MessageType		string
 	ProxyData 		[]byte `json:"ProxyData,omitempty"`
@@ -50,9 +61,7 @@ const CONTROLLER_MESSAGE_REMOVE_CHANNEL_FILTER 	string = "remove-channel-filter"
 const CONTROLLER_MESSAGE_ADD_USER_CALLBACK		string = "add-user-callback"
 const CONTROLLER_MESSAGE_REMOVE_USER_CALLBACK	string = "remove-user-callback"
 
-// TODO: !!! TODO TODO TODO
 
-// - test
 
 func (messageWrapper *ControllerHMAC) Verify(key []byte) (error,ControllerMessage) {
 	var err error = nil
@@ -217,8 +226,10 @@ func (message *ControllerMessage) HandleMessage(controller *ProxyController) []b
 						data, err := json.Marshal(&event)
 						if err == nil {
 							responseBody := bytes.NewBuffer(data)
-							resp, _ := http.Post(message.CallbackURL, "application/json",responseBody)
-							defer resp.Body.Close()
+							resp, err := http.Post(message.CallbackURL, "application/json",responseBody)
+							if err == nil {
+								defer resp.Body.Close()
+							}							
 						}
 					}
 				},

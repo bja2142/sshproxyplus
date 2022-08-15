@@ -21,6 +21,11 @@ const ACTIVE_POLLING_DELAY time.Duration = 500* time.Millisecond
 // combinations and redirect each
 // combination to a different remote
 // host
+
+// Typically the proxy should
+// be managed via the ProxyController
+// functions and not directly
+// called.
 type ProxyContext struct {
 	running				bool
 	listener			net.Listener
@@ -547,13 +552,55 @@ func (proxy *ProxyContext) ListAllActiveSessions() []string {
 
 // note: username/password combo is a 
 // unique key here
+
+/*
+A ProxyUser defines the
+authenticating username
+and password a client
+connecting to the proxy
+must use to authenticate
+to this user. 
+
+Upon successful authentication,
+the user is proxied to the
+RemoteHost using the 
+specified RemoteUsername
+and RemotePassword.
+
+EventCallbacks can be specified
+via the ProxyController to
+provide anonymous functions that can 
+be executed on certain events
+as they occur in a given session. 
+Callbacks occur in goroutines
+and do not block. An example
+callback might be a function
+that calls back to a web hook
+whenever a specific string is seen.
+
+
+channelFilters are also specified via
+the ProxyController and are executed 
+on messages in an established session.
+They receive data as an argument
+and return modified data on the other
+end. These occur in series and
+block the transfer of data through
+the proxy. 
+ChannelFilters do not currently
+distinguish between inbound and outbound
+traffic. Consequently both ends of the
+session will be filtered. 
+
+
+*/
 type ProxyUser struct {
 	Username	string
 	Password	string
 	RemoteHost	string
 	RemoteUsername string
 	RemotePassword string
-	EventCallbacks []*EventCallback
+	EventCallbacks []*EventCallback `json:"-"`
 	channelFilters []*ChannelFilterFunc
 }
 
