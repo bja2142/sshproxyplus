@@ -11,7 +11,32 @@ import (
 	"net/http"
 )
 
+// A simple TCP socket with no encryption
+const PROXY_CONTROLLER_SOCKET_PLAIN				uint16 = 0
 
+// A HTTP websocket with no encryption
+// It can be used with web servers
+const PROXY_CONTROLLER_SOCKET_PLAIN_WEBSOCKET 	uint16 = 1
+
+// A simple socket wrapped in TLS
+const PROXY_CONTROLLER_SOCKET_TLS				uint16 = 2
+
+// A HTTPS websocket that can be used with
+// web servers
+const PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET		uint16 = 3
+
+/*
+The ProxyControllerSocket is either a socket or a 
+websocket. In either case, the socket
+can be wrapped in TLS.
+
+A client connects to the socket and 
+sends authenticated messages to
+ProxyController remotely.
+
+It is the Controller's job to create a valid key
+when it is required for TLS sessions.
+*/
 type ProxyControllerSocketTCP struct {
 	listener net.Listener
 	active	bool

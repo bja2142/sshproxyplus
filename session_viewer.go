@@ -16,6 +16,31 @@ const SESSION_VIEWER_SECRET_LEN	 = 64
 
 const SESSION_VIEWER_EXPIRATION = -1
 
+/*
+
+A proxySessionViewer can be used to
+view all of the sessions associated
+with a specific user. 
+
+The Secret is a unique string used
+with the ProxyController WebServer
+to query and view sessions for a
+given user on a given proxy. 
+
+When a remote user connects to the
+proxy for a given user, their
+session is tracked under the ProxyUser
+that corresponds to their credentials.
+
+A viewer can be for all sessions
+associated with a username, or
+with a specific session specified
+in the SessionKey
+
+At this time the expiration field is
+not used. 
+
+*/
 type proxySessionViewer struct {
 	ViewerType int
 	Secret string

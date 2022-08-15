@@ -18,10 +18,37 @@ import (
 	"errors"
 )
 
+
+/*
+ The ProxyController object
+ can be managed directly via the
+ software API, or over a controller
+ socket. 
+
+ It can be used to create  and
+ destroy proxies,
+ start and stop proxies, add ProxyUsers
+ to proxies, create filters and callbacks
+ for users, and to host a web interface
+ which can be used to view sessions
+ in real time. 
+
+ It also provides a socket that can be
+ used to remotely manage the controller.
+ The remote tool must have the same
+ preshared key. The key is used to send
+ HMAC-signed JSON blobs for execution by
+ the controller.
+
+
+*/
 type ProxyController struct {
 	Proxies				map[uint64]*ProxyContext
 	ProxyCounter		uint64
-	PresharedKey		string
+	// Used to authenticate commands 
+	// sent over the controller socket
+	// from a remote server
+	PresharedKey		string 
 	SocketType			uint16
 	SocketHost			string
 	socket				ProxyControllerSocket
@@ -39,10 +66,7 @@ type ProxyController struct {
 }
 
 
-const PROXY_CONTROLLER_SOCKET_PLAIN				uint16 = 0
-const PROXY_CONTROLLER_SOCKET_PLAIN_WEBSOCKET 	uint16 = 1
-const PROXY_CONTROLLER_SOCKET_TLS				uint16 = 2
-const PROXY_CONTROLLER_SOCKET_TLS_WEBSOCKET		uint16 = 3
+
 
 
 
