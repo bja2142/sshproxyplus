@@ -226,8 +226,10 @@ func (message *ControllerMessage) HandleMessage(controller *ProxyController) []b
 						data, err := json.Marshal(&event)
 						if err == nil {
 							responseBody := bytes.NewBuffer(data)
-							resp, _ := http.Post(message.CallbackURL, "application/json",responseBody)
-							defer resp.Body.Close()
+							resp, err := http.Post(message.CallbackURL, "application/json",responseBody)
+							if err == nil {
+								defer resp.Body.Close()
+							}							
 						}
 					}
 				},
