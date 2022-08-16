@@ -778,7 +778,7 @@ function fetch_session_json_and_update_link(filepath,obj)
 
 function fetch_old_session_list()
 {
-    jQuery.get("/sessions/.session_list",update_old_session_list);
+    jQuery.get("/sessions/.session_list?t="+Date.now(),update_old_session_list);
 }
 
 function update_old_session_list(data)
