@@ -379,9 +379,12 @@ function close_session_sockets()
      });
 }
 
-function read_hashes()
+function read_hashes(standalone=false)
 {
-    reset_timers_and_query_sockets()
+    if(!standalone) 
+    {
+        reset_timers_and_query_sockets()
+    }
     if(window.location.hash != "" && window.location.hash.indexOf("&") != -1)
     {
         hash_elements = window.location.hash.slice(1).split("&")
@@ -405,7 +408,10 @@ function read_hashes()
             } else {
                 viewer_key = action_key
             }
-            list_viewer_session_and_add_to_list(viewer_key);
+            if (!standalone)
+            {
+                list_viewer_session_and_add_to_list(viewer_key);
+            }
             return
 
         } else if (action_type == "signed-session") {
@@ -414,7 +420,11 @@ function read_hashes()
         }
     } 
     //run_timer(fetch_old_session_list);
-    init_query_socket();
+    if(!standalone)
+    {
+        init_query_socket();
+    }
+    
 }
 
 function run_timer(fn,interval=10*1000)

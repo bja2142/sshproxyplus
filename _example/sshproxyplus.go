@@ -45,7 +45,7 @@ func main() {
 	if err != nil || controller == nil {
 		logger.Println("Using Default Controller.")
 		controller = &ProxyController{
-			SocketType: PROXY_CONTROLLER_SOCKET_TLS,
+			SocketType: PROXY_CONTROLLER_SOCKET_PLAIN,
 			SocketHost: *args["controller.Listen_host"].(*string),
 			PresharedKey: "key",
 			TLSKey: *args["tls_key"].(*string),
@@ -67,7 +67,8 @@ func main() {
 			RemoteUsername: "ben",
 			RemotePassword: "password"})
 
-		controller.AddExistingProxy(cur_proxy)
+		proxyID := controller.AddExistingProxy(cur_proxy)
+		controller.ActivateProxy(proxyID)
 	}
 
 	controller.Listen()
@@ -198,7 +199,7 @@ func parseArgs() map[string]interface{} {
 	args["web_listen_port"] = flag.Int("web-port", 8080, "web server listen port; defaults to 8080")
 	args["server_version"] = flag.String("server-version", "SSH-2.0-OpenSSH_7.9p1 Raspbian-10", "server version to use")
 	args["base_URI_option"] = flag.String("base-uri","auto","override base URI when crafting signed URLs; default is to auto-detect")
-	args["public_access"] = flag.Bool("public-view", false, "allow viewers to query sessions without secret URL")
+	args["public_access"] = flag.Bool("public-view", true, "allow viewers to query sessions without secret URL")
 	args["controller_config_file"] = flag.String("config", "", "path to a config file for controller to load. otherwise a hardcoded default is used.")
 	args["controller.Listen_host"] = flag.String("controller-listen-host", "127.0.0.1:9999", "host for controller port to listen on.")
 	args["controller_web_static_dir"] = flag.String("controller-web-static-dir", "./html", "host for controller port to listen on.")
