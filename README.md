@@ -52,7 +52,7 @@ down the source files.
 Go to html/js and run:
 
 ```
-npm install --save xterm.js
+npm install --save xterm
 npm install --save xterm-addon-fit
 ```
 

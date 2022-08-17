@@ -15,9 +15,9 @@ jQuery(document).ready(function() {
     terminal_reader.disable_resize()
     terminal_reader.initialize()    
     jQuery( window ).on( 'hashchange', function( e ) {
-        read_hashes();
+        read_hashes(true);
     } );
-    read_hashes();
+    read_hashes(true);
 
     setTimeout(resize_terminal_to_window, 100);
 

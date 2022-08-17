@@ -172,7 +172,8 @@ func (controller *ProxyController) WriteControllerConfigToFile(filepath string) 
 
 // TODO: write test case for this function 
 
-
+// TODO: when writing test cases, see if a ProxyUser is created if it exists in the viewer but not 
+// in the proxy already
 func LoadControllerConfigFromFile(filepath string, signer ssh.Signer) (error, *ProxyController) {
 	data, err := os.ReadFile(filepath)
 	if(err != nil) {

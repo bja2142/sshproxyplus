@@ -256,6 +256,8 @@ func (proxy *ProxyContext) RemoveProxyUser(username string, password string) err
 	return err
 }
 
+// TODO: create test case for when the password is blank in the ProxyUser
+
 func (proxy *ProxyContext) AuthenticateUser(username,password string) (error, *ProxyUser) {
 	
 	default_user := &ProxyUser{
@@ -370,7 +372,7 @@ func (proxy *ProxyContext) HandleClientConn(client_conn *ssh.ServerConn, client_
 		},
 
 	}
-	remote_sock, err := net.DialTimeout("tcp", curSession.user.RemoteHost, 5000000000)
+	remote_sock, err := net.DialTimeout("tcp", curSession.user.RemoteHost, time.Second*3)
 	if err != nil {
 		proxy.Log.Printf("Error: cannot connect to remote server %s\n",curSession.user.RemoteHost)
 		return
