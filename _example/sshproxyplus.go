@@ -76,6 +76,7 @@ func main() {
 	go controller.StartWebServer()
 
 	for index,_ := range controller.Proxies {
+		controller.ActivateProxy(index)
 		go controller.StartProxy(index)
 	}
 
